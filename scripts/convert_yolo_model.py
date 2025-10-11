@@ -82,8 +82,7 @@ def convert_yolo_to_coreml(input_path: str, output_path: str, input_size: int = 
             workspace=4,  # Workspace size in GB
             nms=True,  # Include NMS in the model
             agnostic_nms=False,  # Class-aware NMS
-            retina_masks=False,  # No mask support
-            format='coreml'
+            retina_masks=False  # No mask support
         )
         
         print(f"\n3. Saving CoreML model...")

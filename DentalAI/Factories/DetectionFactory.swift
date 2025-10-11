@@ -19,15 +19,12 @@ class DetectionFactory {
     
     // MARK: - Service Creation
     private static func makeMLDetectionService() -> DetectionService {
-        let mlService = MLDetectionService()
-        
-        // If ML model is not available and fallback is enabled, use CV service
-        if !mlService.isModelAvailable && FeatureFlags.enableFallback {
-            print("ML model not available, falling back to CV detection")
-            return makeCVDetectionService()
-        }
-        
-        return mlService
+        // Use ONNX service instead of CoreML service
+        return makeONNXDetectionService()
+    }
+    
+    private static func makeONNXDetectionService() -> DetectionService {
+        return ONNXDetectionService()
     }
     
     private static func makeCVDetectionService() -> DetectionService {
