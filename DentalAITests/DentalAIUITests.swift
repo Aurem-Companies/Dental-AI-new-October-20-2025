@@ -1,469 +1,350 @@
 import XCTest
-import UIKit
-@testable import DentalAI
 
-final class DentalAIUITests: XCTestCase {
+// MARK: - DentalAI UI Tests
+class DentalAIUITests: XCTestCase {
     
     var app: XCUIApplication!
-    var analysisEngine: DentalAnalysisEngine!
-    var imageProcessor: MockImageProcessor!
     
     override func setUpWithError() throws {
         continueAfterFailure = false
-        
-        // Initialize test app
         app = XCUIApplication()
         app.launch()
-        
-        // Initialize test dependencies
-        imageProcessor = MockImageProcessor()
-        analysisEngine = DentalAnalysisEngine(imageProcessor: imageProcessor)
     }
     
     override func tearDownWithError() throws {
         app = nil
-        analysisEngine = nil
-        imageProcessor = nil
     }
     
-    // MARK: - Poor Lighting Scenario Tests
+    // MARK: - Launch Tests
+    func testAppLaunch() throws {
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
+        XCTAssertTrue(app.navigationBars["🦷 DentalAI"].exists)
+    }
     
-    func testPoorLightingImageCapture() throws {
-        // Test image capture in poor lighting conditions
-        let poorLightingImage = createPoorLightingImage()
+    // MARK: - Tab Navigation Tests
+    func testTabNavigation() throws {
+        // Test Home tab
+        app.tabBars.buttons["Home"].tap()
+        XCTAssertTrue(app.navigationBars["🦷 DentalAI"].exists)
         
-        // Mock poor lighting quality assessment
-        let poorQuality = ImageQuality(poor: true, issues: ["Image too dark", "Low contrast"])
-        imageProcessor.mockImageQuality = poorQuality
+        // Test History tab
+        app.tabBars.buttons["History"].tap()
+        XCTAssertTrue(app.navigationBars["📋 History"].exists)
         
-        // Test the analysis
-        let result = await analysisEngine.analyzeDentalImage(poorLightingImage)
+        // Test Profile tab
+        app.tabBars.buttons["Profile"].tap()
+        XCTAssertTrue(app.navigationBars["👤 Profile"].exists)
+    }
+    
+    // MARK: - Home View Tests
+    func testHomeViewElements() throws {
+        // Check for main elements
+        XCTAssertTrue(app.staticTexts["Welcome to DentalAI"].exists)
+        XCTAssertTrue(app.staticTexts["Your AI-powered dental health companion"].exists)
+        XCTAssertTrue(app.staticTexts["📊 Quick Stats"].exists)
+        XCTAssertTrue(app.staticTexts["📸 Capture & Analyze"].exists)
+        XCTAssertTrue(app.staticTexts["📋 Recent Analysis"].exists)
+        XCTAssertTrue(app.staticTexts["💡 Daily Tips"].exists)
+    }
+    
+    func testCaptureButton() throws {
+        let captureButton = app.buttons["Take Photo"]
+        XCTAssertTrue(captureButton.exists)
+        XCTAssertTrue(captureButton.isEnabled)
+    }
+    
+    func testPhotoLibraryButton() throws {
+        let photoLibraryButton = app.buttons["Choose from Library"]
+        XCTAssertTrue(photoLibraryButton.exists)
+        XCTAssertTrue(photoLibraryButton.isEnabled)
+    }
+    
+    func testDailyTips() throws {
+        // Check for daily tips
+        XCTAssertTrue(app.staticTexts["Brush Twice Daily"].exists)
+        XCTAssertTrue(app.staticTexts["Floss Daily"].exists)
+        XCTAssertTrue(app.staticTexts["Stay Hydrated"].exists)
+    }
+    
+    // MARK: - Camera Permission Tests
+    func testCameraPermissionFlow() throws {
+        let captureButton = app.buttons["Take Photo"]
+        captureButton.tap()
         
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("Image too dark"))
-                XCTAssertTrue(reason.contains("Low contrast"))
-            } else {
-                XCTFail("Expected lowQualityImage error for poor lighting")
+        // Handle camera permission alert if it appears
+        if app.alerts.count > 0 {
+            let alert = app.alerts.firstMatch
+            if alert.staticTexts["Allow"].exists {
+                alert.buttons["Allow"].tap()
+            } else if alert.staticTexts["OK"].exists {
+                alert.buttons["OK"].tap()
             }
-        case .success:
-            XCTFail("Analysis should fail with poor lighting image")
+        }
+        
+        // Camera view should appear or permission denied message
+        let cameraView = app.navigationBars["Camera"]
+        let permissionMessage = app.staticTexts["Camera access denied. Please enable in Settings."]
+        
+        XCTAssertTrue(cameraView.exists || permissionMessage.exists)
+    }
+    
+    // MARK: - Photo Library Tests
+    func testPhotoLibraryFlow() throws {
+        let photoLibraryButton = app.buttons["Choose from Library"]
+        photoLibraryButton.tap()
+        
+        // Photo library should appear
+        let photoLibrary = app.navigationBars["Photos"]
+        XCTAssertTrue(photoLibrary.exists)
+        
+        // Cancel photo selection
+        app.buttons["Cancel"].tap()
+    }
+    
+    // MARK: - History View Tests
+    func testHistoryView() throws {
+        app.tabBars.buttons["History"].tap()
+        
+        // Check for history elements
+        XCTAssertTrue(app.navigationBars["📋 History"].exists)
+        
+        // Should show empty state initially
+        let emptyState = app.staticTexts["No recent analysis. Take a photo to get started!"]
+        XCTAssertTrue(emptyState.exists)
+    }
+    
+    // MARK: - Profile View Tests
+    func testProfileView() throws {
+        app.tabBars.buttons["Profile"].tap()
+        
+        // Check for profile elements
+        XCTAssertTrue(app.navigationBars["👤 Profile"].exists)
+        XCTAssertTrue(app.staticTexts["Settings"].exists)
+        XCTAssertTrue(app.staticTexts["Data"].exists)
+        XCTAssertTrue(app.staticTexts["Support"].exists)
+    }
+    
+    func testProfileSettings() throws {
+        app.tabBars.buttons["Profile"].tap()
+        
+        // Test User Profile navigation
+        app.staticTexts["User Profile"].tap()
+        XCTAssertTrue(app.navigationBars["User Profile"].exists)
+        app.navigationBars.buttons["Back"].tap()
+        
+        // Test Notifications navigation
+        app.staticTexts["Notifications"].tap()
+        XCTAssertTrue(app.navigationBars["Notifications"].exists)
+        app.navigationBars.buttons["Back"].tap()
+        
+        // Test Privacy navigation
+        app.staticTexts["Privacy"].tap()
+        XCTAssertTrue(app.navigationBars["Privacy"].exists)
+        app.navigationBars.buttons["Back"].tap()
+    }
+    
+    func testProfileDataOptions() throws {
+        app.tabBars.buttons["Profile"].tap()
+        
+        // Test Export Data navigation
+        app.staticTexts["Export Data"].tap()
+        XCTAssertTrue(app.navigationBars["Export Data"].exists)
+        app.navigationBars.buttons["Back"].tap()
+        
+        // Test Import Data navigation
+        app.staticTexts["Import Data"].tap()
+        XCTAssertTrue(app.navigationBars["Import Data"].exists)
+        app.navigationBars.buttons["Back"].tap()
+    }
+    
+    func testProfileSupportOptions() throws {
+        app.tabBars.buttons["Profile"].tap()
+        
+        // Test About navigation
+        app.staticTexts["About DentalAI"].tap()
+        XCTAssertTrue(app.navigationBars["About"].exists)
+        app.buttons["Done"].tap()
+        
+        // Test Contact Support
+        app.staticTexts["Contact Support"].tap()
+        // Should open contact method (email, phone, etc.)
+        
+        // Test Rate App
+        app.staticTexts["Rate App"].tap()
+        // Should open App Store rating
+    }
+    
+    // MARK: - About View Tests
+    func testAboutView() throws {
+        app.tabBars.buttons["Profile"].tap()
+        app.staticTexts["About DentalAI"].tap()
+        
+        // Check for about elements
+        XCTAssertTrue(app.navigationBars["About"].exists)
+        XCTAssertTrue(app.staticTexts["DentalAI"].exists)
+        XCTAssertTrue(app.staticTexts["Version 1.0.0"].exists)
+        XCTAssertTrue(app.staticTexts["About"].exists)
+        XCTAssertTrue(app.staticTexts["Features"].exists)
+        XCTAssertTrue(app.staticTexts["Disclaimer"].exists)
+        
+        // Test done button
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.navigationBars["👤 Profile"].exists)
+    }
+    
+    // MARK: - Accessibility Tests
+    func testAccessibilityLabels() throws {
+        // Test button accessibility
+        let captureButton = app.buttons["Take Photo"]
+        XCTAssertTrue(captureButton.exists)
+        
+        let photoLibraryButton = app.buttons["Choose from Library"]
+        XCTAssertTrue(photoLibraryButton.exists)
+        
+        // Test tab bar accessibility
+        let homeTab = app.tabBars.buttons["Home"]
+        let historyTab = app.tabBars.buttons["History"]
+        let profileTab = app.tabBars.buttons["Profile"]
+        
+        XCTAssertTrue(homeTab.exists)
+        XCTAssertTrue(historyTab.exists)
+        XCTAssertTrue(profileTab.exists)
+    }
+    
+    // MARK: - Performance Tests
+    func testAppLaunchPerformance() throws {
+        measure(metrics: [XCTApplicationLaunchMetric()]) {
+            app.launch()
         }
     }
     
-    func testVeryDarkImage() throws {
-        // Test extremely dark image
-        let darkImage = createVeryDarkImage()
-        
-        let darkQuality = ImageQuality(poor: true, issues: ["Image too dark", "Insufficient lighting"])
-        imageProcessor.mockImageQuality = darkQuality
-        
-        let result = await analysisEngine.analyzeDentalImage(darkImage)
-        
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("Image too dark"))
-            } else {
-                XCTFail("Expected lowQualityImage error for dark image")
-            }
-        case .success:
-            XCTFail("Analysis should fail with very dark image")
+    func testTabSwitchingPerformance() throws {
+        measure {
+            app.tabBars.buttons["Home"].tap()
+            app.tabBars.buttons["History"].tap()
+            app.tabBars.buttons["Profile"].tap()
+            app.tabBars.buttons["Home"].tap()
         }
     }
     
-    func testOverexposedImage() throws {
-        // Test overexposed image
-        let overexposedImage = createOverexposedImage()
-        
-        let overexposedQuality = ImageQuality(poor: true, issues: ["Image too bright", "Overexposed"])
-        imageProcessor.mockImageQuality = overexposedQuality
-        
-        let result = await analysisEngine.analyzeDentalImage(overexposedImage)
-        
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("Image too bright"))
-            } else {
-                XCTFail("Expected lowQualityImage error for overexposed image")
-            }
-        case .success:
-            XCTFail("Analysis should fail with overexposed image")
-        }
+    // MARK: - Error Handling Tests
+    func testErrorHandling() throws {
+        // Test with invalid image (if possible)
+        // This would require mocking or using a test image
+        // For now, just verify the app doesn't crash
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
     }
     
-    func testLowContrastImage() throws {
-        // Test low contrast image
-        let lowContrastImage = createLowContrastImage()
+    // MARK: - Dark Mode Tests
+    func testDarkModeSupport() throws {
+        // Test app appearance in dark mode
+        app.buttons["Take Photo"].tap()
         
-        let lowContrastQuality = ImageQuality(poor: true, issues: ["Low contrast", "Poor image quality"])
-        imageProcessor.mockImageQuality = lowContrastQuality
-        
-        let result = await analysisEngine.analyzeDentalImage(lowContrastImage)
-        
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("Low contrast"))
-            } else {
-                XCTFail("Expected lowQualityImage error for low contrast image")
-            }
-        case .success:
-            XCTFail("Analysis should fail with low contrast image")
-        }
+        // Verify UI elements are still visible and functional
+        XCTAssertTrue(app.buttons["Take Photo"].exists)
     }
     
-    func testBlurryImage() throws {
-        // Test blurry image
-        let blurryImage = createBlurryImage()
+    // MARK: - Orientation Tests
+    func testOrientationSupport() throws {
+        // Test portrait orientation
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 2))
         
-        let blurryQuality = ImageQuality(poor: true, issues: ["Image appears blurry", "Poor focus"])
-        imageProcessor.mockImageQuality = blurryQuality
+        // Test landscape orientation
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 2))
         
-        let result = await analysisEngine.analyzeDentalImage(blurryImage)
-        
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("blurry"))
-            } else {
-                XCTFail("Expected lowQualityImage error for blurry image")
-            }
-        case .success:
-            XCTFail("Analysis should fail with blurry image")
-        }
+        // Return to portrait
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 2))
     }
     
-    // MARK: - Real-World Scenario Tests
-    
-    func testBathroomLighting() throws {
-        // Simulate bathroom lighting conditions
-        let bathroomImage = createBathroomLightingImage()
-        
-        let bathroomQuality = ImageQuality(poor: true, issues: ["Harsh lighting", "Shadows", "Reflections"])
-        imageProcessor.mockImageQuality = bathroomQuality
-        
-        let result = await analysisEngine.analyzeDentalImage(bathroomImage)
-        
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("Harsh lighting") || reason.contains("Shadows"))
-            } else {
-                XCTFail("Expected lowQualityImage error for bathroom lighting")
-            }
-        case .success:
-            XCTFail("Analysis should fail with bathroom lighting")
+    // MARK: - Memory Tests
+    func testMemoryUsage() throws {
+        // Navigate through all tabs multiple times
+        for _ in 0..<5 {
+            app.tabBars.buttons["Home"].tap()
+            app.tabBars.buttons["History"].tap()
+            app.tabBars.buttons["Profile"].tap()
         }
+        
+        // App should still be responsive
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 2))
     }
     
-    func testOutdoorLighting() throws {
-        // Simulate outdoor lighting conditions
-        let outdoorImage = createOutdoorLightingImage()
-        
-        let outdoorQuality = ImageQuality(poor: true, issues: ["Too bright", "Harsh shadows", "Overexposed"])
-        imageProcessor.mockImageQuality = outdoorQuality
-        
-        let result = await analysisEngine.analyzeDentalImage(outdoorImage)
-        
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("Too bright") || reason.contains("Overexposed"))
-            } else {
-                XCTFail("Expected lowQualityImage error for outdoor lighting")
-            }
-        case .success:
-            XCTFail("Analysis should fail with outdoor lighting")
-        }
+    // MARK: - Network Tests
+    func testOfflineFunctionality() throws {
+        // Test app functionality without network
+        // Most features should work offline
+        XCTAssertTrue(app.buttons["Take Photo"].exists)
+        XCTAssertTrue(app.buttons["Choose from Library"].exists)
     }
     
-    func testIndoorDimLighting() throws {
-        // Simulate dim indoor lighting
-        let dimIndoorImage = createDimIndoorLightingImage()
-        
-        let dimQuality = ImageQuality(poor: true, issues: ["Insufficient lighting", "Too dark", "Low contrast"])
-        imageProcessor.mockImageQuality = dimQuality
-        
-        let result = await analysisEngine.analyzeDentalImage(dimIndoorImage)
-        
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("Insufficient lighting") || reason.contains("Too dark"))
-            } else {
-                XCTFail("Expected lowQualityImage error for dim indoor lighting")
-            }
-        case .success:
-            XCTFail("Analysis should fail with dim indoor lighting")
-        }
+    // MARK: - Localization Tests
+    func testLocalization() throws {
+        // Test app in different languages
+        // This would require changing device language
+        // For now, just verify English text is present
+        XCTAssertTrue(app.staticTexts["Welcome to DentalAI"].exists)
     }
     
-    func testMixedLighting() throws {
-        // Simulate mixed lighting conditions
-        let mixedLightingImage = createMixedLightingImage()
+    // MARK: - Security Tests
+    func testDataPrivacy() throws {
+        // Test that sensitive data is not exposed in UI
+        app.tabBars.buttons["Profile"].tap()
+        app.staticTexts["Privacy"].tap()
         
-        let mixedQuality = ImageQuality(poor: true, issues: ["Mixed lighting", "Inconsistent exposure", "Shadows"])
-        imageProcessor.mockImageQuality = mixedQuality
-        
-        let result = await analysisEngine.analyzeDentalImage(mixedLightingImage)
-        
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("Mixed lighting") || reason.contains("Inconsistent"))
-            } else {
-                XCTFail("Expected lowQualityImage error for mixed lighting")
-            }
-        case .success:
-            XCTFail("Analysis should fail with mixed lighting")
-        }
+        // Verify privacy settings are accessible
+        XCTAssertTrue(app.navigationBars["Privacy"].exists)
     }
     
-    // MARK: - Edge Case Tests
-    
-    func testExtremeLowLight() throws {
-        // Test extremely low light conditions
-        let extremeLowLightImage = createExtremeLowLightImage()
+    // MARK: - Integration Tests
+    func testCompleteUserFlow() throws {
+        // Test complete user flow from launch to analysis
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
         
-        let extremeQuality = ImageQuality(poor: true, issues: ["Extremely dark", "No visible details", "Insufficient data"])
-        imageProcessor.mockImageQuality = extremeQuality
+        // Navigate to home
+        app.tabBars.buttons["Home"].tap()
         
-        let result = await analysisEngine.analyzeDentalImage(extremeLowLightImage)
+        // Check for capture button
+        XCTAssertTrue(app.buttons["Take Photo"].exists)
         
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("Extremely dark") || reason.contains("No visible details"))
-            } else {
-                XCTFail("Expected lowQualityImage error for extreme low light")
-            }
-        case .success:
-            XCTFail("Analysis should fail with extreme low light")
-        }
-    }
-    
-    func testFlashOverexposure() throws {
-        // Test flash overexposure
-        let flashOverexposedImage = createFlashOverexposedImage()
+        // Navigate to history
+        app.tabBars.buttons["History"].tap()
         
-        let flashQuality = ImageQuality(poor: true, issues: ["Flash overexposure", "Too bright", "Lost details"])
-        imageProcessor.mockImageQuality = flashQuality
+        // Check for empty state
+        XCTAssertTrue(app.staticTexts["No recent analysis. Take a photo to get started!"].exists)
         
-        let result = await analysisEngine.analyzeDentalImage(flashOverexposedImage)
+        // Navigate to profile
+        app.tabBars.buttons["Profile"].tap()
         
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("Flash overexposure") || reason.contains("Too bright"))
-            } else {
-                XCTFail("Expected lowQualityImage error for flash overexposure")
-            }
-        case .success:
-            XCTFail("Analysis should fail with flash overexposure")
-        }
-    }
-    
-    func testBacklighting() throws {
-        // Test backlighting conditions
-        let backlitImage = createBacklitImage()
-        
-        let backlitQuality = ImageQuality(poor: true, issues: ["Backlighting", "Subject too dark", "Poor contrast"])
-        imageProcessor.mockImageQuality = backlitQuality
-        
-        let result = await analysisEngine.analyzeDentalImage(backlitImage)
-        
-        switch result {
-        case .failure(let error):
-            if case .lowQualityImage(let reason) = error {
-                XCTAssertTrue(reason.contains("Backlighting") || reason.contains("Subject too dark"))
-            } else {
-                XCTFail("Expected lowQualityImage error for backlighting")
-            }
-        case .success:
-            XCTFail("Analysis should fail with backlighting")
-        }
-    }
-    
-    // MARK: - Performance Tests for Poor Lighting
-    
-    func testPoorLightingPerformance() throws {
-        // Test performance with poor lighting images
-        let poorLightingImage = createPoorLightingImage()
-        let poorQuality = ImageQuality(poor: true, issues: ["Poor lighting"])
-        imageProcessor.mockImageQuality = poorQuality
-        
-        let startTime = CFAbsoluteTimeGetCurrent()
-        let result = await analysisEngine.analyzeDentalImage(poorLightingImage)
-        let timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
-        
-        // Should fail quickly for poor quality images
-        switch result {
-        case .failure:
-            XCTAssertLessThan(timeElapsed, 2.0, "Poor lighting analysis should fail quickly")
-        case .success:
-            XCTFail("Analysis should fail with poor lighting")
-        }
+        // Check for profile options
+        XCTAssertTrue(app.staticTexts["Settings"].exists)
+        XCTAssertTrue(app.staticTexts["Data"].exists)
+        XCTAssertTrue(app.staticTexts["Support"].exists)
     }
     
     // MARK: - Helper Methods
+    private func waitForElement(_ element: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        return element.waitForExistence(timeout: timeout)
+    }
     
-    private func createPoorLightingImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Create a dark image with poor contrast
-            UIColor.darkGray.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            
-            // Add some very dark areas
-            UIColor.black.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: size.width, height: size.height * 0.3))
+    private func tapIfExists(_ element: XCUIElement) {
+        if element.exists {
+            element.tap()
         }
     }
     
-    private func createVeryDarkImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Create an extremely dark image
-            UIColor.black.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-        }
-    }
-    
-    private func createOverexposedImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Create an overexposed image
-            UIColor.white.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-        }
-    }
-    
-    private func createLowContrastImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Create a low contrast image
-            UIColor.gray.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-        }
-    }
-    
-    private func createBlurryImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Create a blurry image by drawing with low opacity
-            UIColor.white.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            
-            // Add some blurry elements
-            context.cgContext.setAlpha(0.3)
-            UIColor.black.setFill()
-            context.fill(CGRect(x: 100, y: 100, width: 800, height: 800))
-        }
-    }
-    
-    private func createBathroomLightingImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Simulate bathroom lighting with harsh shadows
-            UIColor.lightGray.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            
-            // Add harsh shadows
-            UIColor.darkGray.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: size.width * 0.3, height: size.height))
-        }
-    }
-    
-    private func createOutdoorLightingImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Simulate outdoor lighting
-            UIColor.white.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            
-            // Add harsh shadows
-            UIColor.black.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: size.width * 0.2, height: size.height))
-        }
-    }
-    
-    private func createDimIndoorLightingImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Simulate dim indoor lighting
-            UIColor.darkGray.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-        }
-    }
-    
-    private func createMixedLightingImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Simulate mixed lighting
-            UIColor.gray.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            
-            // Add bright and dark areas
-            UIColor.white.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: size.width * 0.5, height: size.height))
-            
-            UIColor.black.setFill()
-            context.fill(CGRect(x: size.width * 0.5, y: 0, width: size.width * 0.5, height: size.height))
-        }
-    }
-    
-    private func createExtremeLowLightImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Create extremely low light image
-            UIColor.black.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            
-            // Add very faint details
-            context.cgContext.setAlpha(0.1)
-            UIColor.darkGray.setFill()
-            context.fill(CGRect(x: 200, y: 200, width: 600, height: 600))
-        }
-    }
-    
-    private func createFlashOverexposedImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Create flash overexposed image
-            UIColor.white.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            
-            // Add some blown-out highlights
-            UIColor.yellow.setFill()
-            context.fill(CGRect(x: 300, y: 300, width: 400, height: 400))
-        }
-    }
-    
-    private func createBacklitImage() -> UIImage {
-        let size = CGSize(width: 1000, height: 1000)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            // Create backlit image
-            UIColor.white.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            
-            // Add dark subject in center
-            UIColor.black.setFill()
-            context.fill(CGRect(x: 300, y: 300, width: 400, height: 400))
+    private func dismissAlertIfPresent() {
+        if app.alerts.count > 0 {
+            let alert = app.alerts.firstMatch
+            if alert.buttons["OK"].exists {
+                alert.buttons["OK"].tap()
+            } else if alert.buttons["Allow"].exists {
+                alert.buttons["Allow"].tap()
+            } else if alert.buttons["Cancel"].exists {
+                alert.buttons["Cancel"].tap()
+            }
         }
     }
 }

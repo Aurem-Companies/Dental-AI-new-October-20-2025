@@ -1,37 +1,23 @@
+import Foundation
 import UIKit
-import Vision
 import CoreImage
+import Vision
+import CoreGraphics
+import Accelerate
 
-// MARK: - Image Processing Protocol
-protocol ImageProcessing {
-    func enhanceImage(_ image: UIImage) async throws -> UIImage
-    func assessImageQuality(_ image: UIImage) -> ImageQuality
-    func analyzeToothColor(_ image: UIImage) async throws -> ToothColorAnalysis
-    func detectEdges(_ image: UIImage) async throws -> UIImage?
-    func cropToTeethRegion(_ image: UIImage) async throws -> UIImage?
-}
-
-class ImageProcessor: ObservableObject, ImageProcessing {
+// MARK: - Image Processor
+class ImageProcessor {
+    
+    // MARK: - Properties
+    private let context = CIContext()
+    private let targetSize = CGSize(width: 224, height: 224)
+    private let qualityThreshold: Float = 0.7
     
     // MARK: - Image Enhancement
-    func enhanceImage(_ image: UIImage) async throws -> UIImage {
-        guard let ciImage = CIImage(image: image) else {
-            throw AnalysisError.invalidImage
-        }
+    func enhanceImage(_ image: UIImage) -> UIImage? {
+        guard let ciImage = CIImage(image: image) else { return nil }
         
-        return try await withCheckedThrowingContinuation { continuation in
-            // Use background queue for image processing to avoid blocking UI
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    // Create context with optimized settings for performance
-                    let context = CIContext(options: [
-                        .workingColorSpace: CGColorSpace(name: CGColorSpace.sRGB),
-                        .outputColorSpace: CGColorSpace(name: CGColorSpace.sRGB),
-                        .cacheIntermediates: true,
-                        .useSoftwareRenderer: false
-                    ])
-                    
-                    // Apply filters for better dental analysis with optimized parameters
+        // Apply enhancement filters
                     let enhancedImage = ciImage
                         .applyingFilter("CIColorControls", parameters: [
                             kCIInputBrightnessKey: 0.1,
@@ -43,71 +29,43 @@ class ImageProcessor: ObservableObject, ImageProcessing {
                             kCIInputIntensityKey: 0.5
                         ])
                     
-                    // Use Metal for hardware acceleration if available
                     guard let cgImage = context.createCGImage(enhancedImage, from: enhancedImage.extent) else {
-                        continuation.resume(throwing: AnalysisError.mlFailure("Failed to create enhanced image"))
-                        return
-                    }
-                    
-                    let result = UIImage(cgImage: cgImage)
-                    continuation.resume(returning: result)
-                } catch {
-                    continuation.resume(throwing: AnalysisError.mlFailure("Image enhancement failed: \(error.localizedDescription)"))
-                }
-            }
+            return nil
+        }
+        
+        return UIImage(cgImage: cgImage)
+    }
+    
+    // MARK: - Image Resizing
+    func resizeImage(_ image: UIImage, to size: CGSize) -> UIImage? {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
         }
     }
     
-    // MARK: - Image Quality Assessment
+    // MARK: - Quality Assessment
     func assessImageQuality(_ image: UIImage) -> ImageQuality {
-        guard let cgImage = image.cgImage else {
-            return ImageQuality(poor: true, issues: ["Invalid image format"])
-        }
-        
-        var issues: [String] = []
-        var poor = false
-        
-        // Check image size
-        let width = cgImage.width
-        let height = cgImage.height
-        
-        if width < 500 || height < 500 {
-            issues.append("Image resolution too low")
-            poor = true
-        }
-        
-        // Check brightness
+        let sharpness = calculateSharpness(image)
         let brightness = calculateBrightness(image)
-        if brightness < 0.3 {
-            issues.append("Image too dark")
-            poor = true
-        } else if brightness > 0.8 {
-            issues.append("Image too bright")
-            poor = true
-        }
-        
-        // Check contrast
         let contrast = calculateContrast(image)
-        if contrast < 0.2 {
-            issues.append("Low contrast")
-            poor = true
-        }
-        
-        // Check blur
         let blur = calculateBlur(image)
-        if blur > 0.5 {
-            issues.append("Image appears blurry")
-            poor = true
-        }
         
-        return ImageQuality(poor: poor, issues: issues)
+        let overallScore = (sharpness + brightness + contrast + (1.0 - blur)) / 4.0
+        
+        return ImageQuality(
+            sharpness: sharpness,
+            brightness: brightness,
+            contrast: contrast,
+            blur: blur,
+            overallScore: overallScore,
+            qualityLevel: determineQualityLevel(overallScore)
+        )
     }
     
-    // MARK: - Color Analysis
-    func analyzeToothColor(_ image: UIImage) async throws -> ToothColorAnalysis {
-        guard let cgImage = image.cgImage else {
-            throw AnalysisError.invalidImage
-        }
+    // MARK: - Sharpness Calculation
+    private func calculateSharpness(_ image: UIImage) -> Float {
+        guard let cgImage = image.cgImage else { return 0.0 }
         
         let width = cgImage.width
         let height = cgImage.height
@@ -115,272 +73,438 @@ class ImageProcessor: ObservableObject, ImageProcessing {
         let bytesPerRow = bytesPerPixel * width
         let bitsPerComponent = 8
         
-        var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
+        guard let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else { return 0.0 }
         
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let context = CGContext(
-            data: &pixelData,
-            width: width,
-            height: height,
-            bitsPerComponent: bitsPerComponent,
-            bytesPerRow: bytesPerRow,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        )
+        // Convert to grayscale
+        var grayPixels = [Float](repeating: 0, count: width * height)
+        for y in 0..<height {
+            for x in 0..<width {
+                let pixelIndex = y * bytesPerRow + x * bytesPerPixel
+                let r = Float(bytes[pixelIndex])
+                let g = Float(bytes[pixelIndex + 1])
+                let b = Float(bytes[pixelIndex + 2])
+                
+                // Convert to grayscale using luminance formula
+                let gray = 0.299 * r + 0.587 * g + 0.114 * b
+                grayPixels[y * width + x] = gray
+            }
+        }
         
-        context?.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        // Calculate Laplacian variance (sharpness measure)
+        var laplacianSum: Float = 0.0
+        var laplacianSquaredSum: Float = 0.0
+        let count = Float((width - 2) * (height - 2))
         
-        var totalR: Double = 0
-        var totalG: Double = 0
-        var totalB: Double = 0
-        var pixelCount = 0
+        for y in 1..<(height - 1) {
+            for x in 1..<(width - 1) {
+                let center = grayPixels[y * width + x]
+                let top = grayPixels[(y - 1) * width + x]
+                let bottom = grayPixels[(y + 1) * width + x]
+                let left = grayPixels[y * width + (x - 1)]
+                let right = grayPixels[y * width + (x + 1)]
+                
+                let laplacian = abs(4 * center - top - bottom - left - right)
+                laplacianSum += laplacian
+                laplacianSquaredSum += laplacian * laplacian
+            }
+        }
         
-        // Sample pixels (every 10th pixel for performance)
-        for y in stride(from: 0, to: height, by: 10) {
-            for x in stride(from: 0, to: width, by: 10) {
-                let pixelIndex = (y * width + x) * bytesPerPixel
-                if pixelIndex + 2 < pixelData.count {
-                    let r = Double(pixelData[pixelIndex])
-                    let g = Double(pixelData[pixelIndex + 1])
-                    let b = Double(pixelData[pixelIndex + 2])
-                    
-                    totalR += r
-                    totalG += g
-                    totalB += b
-                    pixelCount += 1
+        let mean = laplacianSum / count
+        let variance = (laplacianSquaredSum / count) - (mean * mean)
+        
+        // Normalize to 0-1 range
+        return min(1.0, max(0.0, variance / 1000.0))
+    }
+    
+    // MARK: - Brightness Calculation
+    private func calculateBrightness(_ image: UIImage) -> Float {
+        guard let cgImage = image.cgImage else { return 0.0 }
+        
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        
+        guard let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else { return 0.0 }
+        
+        var totalBrightness: Float = 0.0
+        let pixelCount = Float(width * height)
+        
+        for y in 0..<height {
+            for x in 0..<width {
+                let pixelIndex = y * bytesPerRow + x * bytesPerPixel
+                let r = Float(bytes[pixelIndex])
+                let g = Float(bytes[pixelIndex + 1])
+                let b = Float(bytes[pixelIndex + 2])
+                
+                // Calculate perceived brightness
+                let brightness = 0.299 * r + 0.587 * g + 0.114 * b
+                totalBrightness += brightness
+            }
+        }
+        
+        let averageBrightness = totalBrightness / pixelCount
+        return averageBrightness / 255.0
+    }
+    
+    // MARK: - Contrast Calculation
+    private func calculateContrast(_ image: UIImage) -> Float {
+        guard let cgImage = image.cgImage else { return 0.0 }
+        
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        
+        guard let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else { return 0.0 }
+        
+        var grayPixels = [Float]()
+        grayPixels.reserveCapacity(width * height)
+        
+        for y in 0..<height {
+            for x in 0..<width {
+                let pixelIndex = y * bytesPerRow + x * bytesPerPixel
+                let r = Float(bytes[pixelIndex])
+                let g = Float(bytes[pixelIndex + 1])
+                let b = Float(bytes[pixelIndex + 2])
+                
+                let gray = 0.299 * r + 0.587 * g + 0.114 * b
+                grayPixels.append(gray)
+            }
+        }
+        
+        // Calculate standard deviation as contrast measure
+        let mean = grayPixels.reduce(0, +) / Float(grayPixels.count)
+        let variance = grayPixels.map { pow($0 - mean, 2) }.reduce(0, +) / Float(grayPixels.count)
+        let standardDeviation = sqrt(variance)
+        
+        // Normalize to 0-1 range
+        return min(1.0, max(0.0, standardDeviation / 128.0))
+    }
+    
+    // MARK: - Blur Calculation
+    private func calculateBlur(_ image: UIImage) -> Float {
+        guard let cgImage = image.cgImage else { return 1.0 }
+        
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        
+        guard let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else { return 1.0 }
+        
+        // Convert to grayscale
+        var grayPixels = [Float](repeating: 0, count: width * height)
+        for y in 0..<height {
+            for x in 0..<width {
+                let pixelIndex = y * bytesPerRow + x * bytesPerPixel
+                let r = Float(bytes[pixelIndex])
+                let g = Float(bytes[pixelIndex + 1])
+                let b = Float(bytes[pixelIndex + 2])
+                
+                let gray = 0.299 * r + 0.587 * g + 0.114 * b
+                grayPixels[y * width + x] = gray
+            }
+        }
+        
+        // Calculate gradient magnitude (blur detection)
+        var gradientSum: Float = 0.0
+        let count = Float((width - 1) * (height - 1))
+        
+        for y in 0..<(height - 1) {
+            for x in 0..<(width - 1) {
+                let current = grayPixels[y * width + x]
+                let right = grayPixels[y * width + (x + 1)]
+                let bottom = grayPixels[(y + 1) * width + x]
+                
+                let gradientX = right - current
+                let gradientY = bottom - current
+                let magnitude = sqrt(gradientX * gradientX + gradientY * gradientY)
+                
+                gradientSum += magnitude
+            }
+        }
+        
+        let averageGradient = gradientSum / count
+        
+        // Normalize to 0-1 range (higher values = more blur)
+        return min(1.0, max(0.0, 1.0 - (averageGradient / 50.0)))
+    }
+    
+    // MARK: - Quality Level Determination
+    private func determineQualityLevel(_ score: Float) -> QualityLevel {
+        if score >= 0.8 {
+            return .excellent
+        } else if score >= 0.6 {
+            return .good
+        } else if score >= 0.4 {
+            return .fair
+        } else {
+            return .poor
+        }
+    }
+    
+    // MARK: - Tooth Color Analysis
+    func analyzeToothColor(_ image: UIImage) -> ToothColorAnalysis {
+        guard let cgImage = image.cgImage else {
+            return ToothColorAnalysis(color: .unknown, healthiness: 0.0, confidence: 0.0)
+        }
+        
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        
+        guard let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else {
+            return ToothColorAnalysis(color: .unknown, healthiness: 0.0, confidence: 0.0)
+        }
+        
+        var toothPixels: [(r: Float, g: Float, b: Float)] = []
+        
+        // Sample pixels from center region (likely teeth area)
+        let centerX = width / 2
+        let centerY = height / 2
+        let sampleSize = min(width, height) / 4
+        
+        for y in max(0, centerY - sampleSize)..<min(height, centerY + sampleSize) {
+            for x in max(0, centerX - sampleSize)..<min(width, centerX + sampleSize) {
+                let pixelIndex = y * bytesPerRow + x * bytesPerPixel
+                let r = Float(bytes[pixelIndex])
+                let g = Float(bytes[pixelIndex + 1])
+                let b = Float(bytes[pixelIndex + 2])
+                
+                // Filter for tooth-like colors (white to light yellow)
+                if r > 200 && g > 200 && b > 180 && r > b {
+                    toothPixels.append((r: r, g: g, b: b))
                 }
             }
         }
         
-        guard pixelCount > 0 else {
-            return ToothColorAnalysis(dominantColor: .unknown, healthiness: 0.0)
+        guard !toothPixels.isEmpty else {
+            return ToothColorAnalysis(color: .unknown, healthiness: 0.0, confidence: 0.0)
         }
         
-        let avgR = totalR / Double(pixelCount)
-        let avgG = totalG / Double(pixelCount)
-        let avgB = totalB / Double(pixelCount)
+        // Calculate average color
+        let avgR = toothPixels.map { $0.r }.reduce(0, +) / Float(toothPixels.count)
+        let avgG = toothPixels.map { $0.g }.reduce(0, +) / Float(toothPixels.count)
+        let avgB = toothPixels.map { $0.b }.reduce(0, +) / Float(toothPixels.count)
         
-        return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let dominantColor = self.determineToothColor(red: avgR, green: avgG, blue: avgB)
-                    let healthiness = self.calculateHealthiness(red: avgR, green: avgG, blue: avgB)
-                    
-                    let result = ToothColorAnalysis(dominantColor: dominantColor, healthiness: healthiness)
-                    continuation.resume(returning: result)
-                } catch {
-                    continuation.resume(throwing: AnalysisError.mlFailure("Color analysis failed: \(error.localizedDescription)"))
-                }
-            }
+        let color = determineToothColor(r: avgR, g: avgG, b: avgB)
+        let healthiness = calculateHealthiness(r: avgR, g: avgG, b: avgB)
+        let confidence = min(1.0, Float(toothPixels.count) / 1000.0)
+        
+        return ToothColorAnalysis(color: color, healthiness: healthiness, confidence: confidence)
+    }
+    
+    // MARK: - Tooth Color Determination
+    private func determineToothColor(r: Float, g: Float, b: Float) -> ToothColor {
+        let brightness = (r + g + b) / 3.0
+        
+        if brightness > 240 && abs(r - g) < 20 && abs(g - b) < 20 {
+            return .white
+        } else if r > g && g > b && brightness > 220 {
+            return .lightYellow
+        } else if r > g && g > b && brightness > 200 {
+            return .yellow
+        } else if r > g && g > b && brightness > 180 {
+            return .darkYellow
+        } else if r > 200 && g > 150 && b > 150 {
+            return .brown
+        } else {
+            return .unknown
         }
+    }
+    
+    // MARK: - Healthiness Calculation
+    private func calculateHealthiness(r: Float, g: Float, b: Float) -> Float {
+        let brightness = (r + g + b) / 3.0
+        let whiteness = 1.0 - (abs(r - g) + abs(g - b) + abs(r - b)) / (3.0 * 255.0)
+        
+        // Healthier teeth are whiter and brighter
+        let healthiness = (brightness / 255.0) * 0.7 + whiteness * 0.3
+        return min(1.0, max(0.0, healthiness))
     }
     
     // MARK: - Edge Detection
-    func detectEdges(_ image: UIImage) async throws -> UIImage? {
-        guard let ciImage = CIImage(image: image) else {
-            throw AnalysisError.invalidImage
+    func detectEdges(_ image: UIImage) -> EdgeAnalysis {
+        guard let cgImage = image.cgImage else {
+            return EdgeAnalysis(edgeCount: 0, edgeStrength: 0.0, confidence: 0.0)
         }
         
-        return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let context = CIContext()
-                    
-                    let edgeImage = ciImage
-                        .applyingFilter("CIEdges", parameters: [
-                            kCIInputIntensityKey: 1.0
-                        ])
-                    
-                    guard let cgImage = context.createCGImage(edgeImage, from: edgeImage.extent) else {
-                        continuation.resume(throwing: AnalysisError.mlFailure("Failed to create edge image"))
-                        return
-                    }
-                    
-                    let result = UIImage(cgImage: cgImage)
-                    continuation.resume(returning: result)
-                } catch {
-                    continuation.resume(throwing: AnalysisError.mlFailure("Edge detection failed: \(error.localizedDescription)"))
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        
+        guard let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else {
+            return EdgeAnalysis(edgeCount: 0, edgeStrength: 0.0, confidence: 0.0)
+        }
+        
+        // Convert to grayscale
+        var grayPixels = [Float](repeating: 0, count: width * height)
+        for y in 0..<height {
+            for x in 0..<width {
+                let pixelIndex = y * bytesPerRow + x * bytesPerPixel
+                let r = Float(bytes[pixelIndex])
+                let g = Float(bytes[pixelIndex + 1])
+                let b = Float(bytes[pixelIndex + 2])
+                
+                let gray = 0.299 * r + 0.587 * g + 0.114 * b
+                grayPixels[y * width + x] = gray
+            }
+        }
+        
+        // Apply Sobel edge detection
+        var edgePixels = [Float](repeating: 0, count: width * height)
+        var edgeCount = 0
+        var edgeStrengthSum: Float = 0.0
+        
+        for y in 1..<(height - 1) {
+            for x in 1..<(width - 1) {
+                let gx = grayPixels[(y - 1) * width + (x + 1)] + 2 * grayPixels[y * width + (x + 1)] + grayPixels[(y + 1) * width + (x + 1)] -
+                         grayPixels[(y - 1) * width + (x - 1)] - 2 * grayPixels[y * width + (x - 1)] - grayPixels[(y + 1) * width + (x - 1)]
+                
+                let gy = grayPixels[(y + 1) * width + (x - 1)] + 2 * grayPixels[(y + 1) * width + x] + grayPixels[(y + 1) * width + (x + 1)] -
+                         grayPixels[(y - 1) * width + (x - 1)] - 2 * grayPixels[(y - 1) * width + x] - grayPixels[(y - 1) * width + (x + 1)]
+                
+                let magnitude = sqrt(gx * gx + gy * gy)
+                edgePixels[y * width + x] = magnitude
+                
+                if magnitude > 50 { // Threshold for edge detection
+                    edgeCount += 1
+                    edgeStrengthSum += magnitude
                 }
             }
         }
+        
+        let edgeStrength = edgeCount > 0 ? edgeStrengthSum / Float(edgeCount) : 0.0
+        let confidence = min(1.0, Float(edgeCount) / 10000.0)
+        
+        return EdgeAnalysis(edgeCount: edgeCount, edgeStrength: edgeStrength, confidence: confidence)
     }
     
     // MARK: - Crop to Teeth Region
-    func cropToTeethRegion(_ image: UIImage) async throws -> UIImage? {
+    func cropToTeethRegion(_ image: UIImage) -> UIImage? {
         // This is a simplified implementation
         // In a real app, you'd use more sophisticated tooth detection
         let cropRect = CGRect(
             x: image.size.width * 0.1,
-            y: image.size.height * 0.3,
+            y: image.size.height * 0.2,
             width: image.size.width * 0.8,
-            height: image.size.height * 0.4
+            height: image.size.height * 0.6
         )
         
-        guard let cgImage = image.cgImage?.cropping(to: cropRect) else {
-            throw AnalysisError.mlFailure("Failed to crop image to teeth region")
-        }
-        
+        guard let cgImage = image.cgImage?.cropping(to: cropRect) else { return nil }
         return UIImage(cgImage: cgImage)
-    }
-    
-    // MARK: - Private Helper Methods
-    // Exposed internally for use by other services (e.g., DentalAnalysisEngine)
-    internal func calculateBrightness(_ image: UIImage) -> Double {
-        guard let cgImage = image.cgImage else { return 0.0 }
-        
-        let width = cgImage.width
-        let height = cgImage.height
-        let bytesPerPixel = 4
-        let bytesPerRow = bytesPerPixel * width
-        
-        var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
-        
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let context = CGContext(
-            data: &pixelData,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: bytesPerRow,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        )
-        
-        context?.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-        
-        var totalBrightness: Double = 0
-        var pixelCount = 0
-        
-        for i in stride(from: 0, to: pixelData.count, by: bytesPerPixel) {
-            let r = Double(pixelData[i])
-            let g = Double(pixelData[i + 1])
-            let b = Double(pixelData[i + 2])
-            
-            // Calculate brightness using luminance formula
-            let brightness = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
-            totalBrightness += brightness
-            pixelCount += 1
-        }
-        
-        return pixelCount > 0 ? totalBrightness / Double(pixelCount) : 0.0
-    }
-    
-    internal func calculateContrast(_ image: UIImage) -> Double {
-        guard let cgImage = image.cgImage else { return 0.0 }
-        
-        let width = cgImage.width
-        let height = cgImage.height
-        let bytesPerPixel = 4
-        let bytesPerRow = bytesPerPixel * width
-        
-        var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
-        
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let context = CGContext(
-            data: &pixelData,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: bytesPerRow,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        )
-        
-        context?.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-        
-        var brightnessValues: [Double] = []
-        
-        for i in stride(from: 0, to: pixelData.count, by: bytesPerPixel) {
-            let r = Double(pixelData[i])
-            let g = Double(pixelData[i + 1])
-            let b = Double(pixelData[i + 2])
-            
-            let brightness = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
-            brightnessValues.append(brightness)
-        }
-        
-        guard !brightnessValues.isEmpty else { return 0.0 }
-        
-        let mean = brightnessValues.reduce(0, +) / Double(brightnessValues.count)
-        let variance = brightnessValues.map { pow($0 - mean, 2) }.reduce(0, +) / Double(brightnessValues.count)
-        
-        return sqrt(variance)
-    }
-    
-    internal func calculateBlur(_ image: UIImage) -> Double {
-        // Simplified blur detection using edge detection
-        guard let edgeImage = detectEdges(image) else { return 0.0 }
-        
-        let edgeBrightness = calculateBrightness(edgeImage)
-        let originalBrightness = calculateBrightness(image)
-        
-        // If edges are much dimmer than the original, the image is likely blurry
-        return max(0, 1.0 - (edgeBrightness / originalBrightness))
-    }
-    
-    private func determineToothColor(red: Double, green: Double, blue: Double) -> ToothColor {
-        // Simple color classification based on RGB values
-        if red > 200 && green > 200 && blue > 200 {
-            return .white
-        } else if red > 180 && green > 180 && blue > 150 {
-            return .offWhite
-        } else if red > 160 && green > 160 && blue > 120 {
-            return .lightYellow
-        } else if red > 140 && green > 140 && blue > 100 {
-            return .yellow
-        } else if red > 120 && green > 120 && blue > 80 {
-            return .darkYellow
-        } else if red < 100 && green < 100 && blue < 100 {
-            return .black
-        } else {
-            return .brown
-        }
-    }
-    
-    private func calculateHealthiness(red: Double, green: Double, blue: Double) -> Double {
-        // Healthiness score based on color (higher is healthier)
-        let brightness = (red + green + blue) / 3.0
-        let colorBalance = 1.0 - abs(red - green) / 255.0 - abs(green - blue) / 255.0
-        
-        return min(1.0, (brightness / 255.0 + colorBalance) / 2.0)
     }
 }
 
 // MARK: - Supporting Types
 struct ImageQuality {
-    let poor: Bool
-    let issues: [String]
+    let sharpness: Float
+    let brightness: Float
+    let contrast: Float
+    let blur: Float
+    let overallScore: Float
+    let qualityLevel: QualityLevel
+}
+
+enum QualityLevel: String, CaseIterable {
+    case excellent = "excellent"
+    case good = "good"
+    case fair = "fair"
+    case poor = "poor"
     
-    var score: Int {
-        return poor ? max(0, 100 - issues.count * 20) : 100
+    var displayName: String {
+        switch self {
+        case .excellent: return "Excellent"
+        case .good: return "Good"
+        case .fair: return "Fair"
+        case .poor: return "Poor"
+        }
+    }
+    
+    var emoji: String {
+        switch self {
+        case .excellent: return "🌟"
+        case .good: return "✅"
+        case .fair: return "⚠️"
+        case .poor: return "❌"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .excellent: return .green
+        case .good: return .blue
+        case .fair: return .orange
+        case .poor: return .red
+        }
     }
 }
 
 struct ToothColorAnalysis {
-    let dominantColor: ToothColor
-    let healthiness: Double // 0.0 to 1.0
+    let color: ToothColor
+    let healthiness: Float
+    let confidence: Float
 }
 
 enum ToothColor: String, CaseIterable {
-    case white = "White"
-    case offWhite = "Off-White"
-    case lightYellow = "Light Yellow"
-    case yellow = "Yellow"
-    case darkYellow = "Dark Yellow"
-    case brown = "Brown"
-    case black = "Black"
-    case unknown = "Unknown"
+    case white = "white"
+    case lightYellow = "light_yellow"
+    case yellow = "yellow"
+    case darkYellow = "dark_yellow"
+    case brown = "brown"
+    case unknown = "unknown"
     
-    var healthiness: Double {
+    var displayName: String {
         switch self {
-        case .white: return 1.0
-        case .offWhite: return 0.9
-        case .lightYellow: return 0.7
-        case .yellow: return 0.5
-        case .darkYellow: return 0.3
-        case .brown: return 0.2
-        case .black: return 0.1
-        case .unknown: return 0.0
+        case .white: return "White"
+        case .lightYellow: return "Light Yellow"
+        case .yellow: return "Yellow"
+        case .darkYellow: return "Dark Yellow"
+        case .brown: return "Brown"
+        case .unknown: return "Unknown"
         }
     }
+    
+    var emoji: String {
+        switch self {
+        case .white: return "🤍"
+        case .lightYellow: return "💛"
+        case .yellow: return "🟡"
+        case .darkYellow: return "🟨"
+        case .brown: return "🤎"
+        case .unknown: return "❓"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .white: return .white
+        case .lightYellow: return .yellow
+        case .yellow: return .yellow
+        case .darkYellow: return .orange
+        case .brown: return .brown
+        case .unknown: return .gray
+        }
+    }
+}
+
+struct EdgeAnalysis {
+    let edgeCount: Int
+    let edgeStrength: Float
+    let confidence: Float
 }

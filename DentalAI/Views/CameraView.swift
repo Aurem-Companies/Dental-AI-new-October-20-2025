@@ -2,17 +2,19 @@ import SwiftUI
 import UIKit
 import AVFoundation
 
+// MARK: - Camera View
 struct CameraView: UIViewControllerRepresentable {
-    @Binding var selectedImage: UIImage?
-    @Environment(\.presentationMode) var presentationMode
+    @ObservedObject var detectionViewModel: DetectionViewModel
+    @Binding var showingImageAnalysis: Bool
+    @Environment(\.dismiss) private var dismiss
     
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
         picker.sourceType = .camera
-        picker.cameraDevice = .front // Front camera for selfies
+        picker.cameraDevice = .front
         picker.cameraFlashMode = .off
-        picker.allowsEditing = true
+        picker.allowsEditing = false
         return picker
     }
     
@@ -30,30 +32,45 @@ struct CameraView: UIViewControllerRepresentable {
         }
         
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let editedImage = info[.editedImage] as? UIImage {
-                parent.selectedImage = editedImage
-            } else if let originalImage = info[.originalImage] as? UIImage {
-                parent.selectedImage = originalImage
+            if let image = info[.originalImage] as? UIImage {
+                parent.processImage(image)
             }
-            
-            parent.presentationMode.wrappedValue.dismiss()
+            parent.dismiss()
         }
         
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.presentationMode.wrappedValue.dismiss()
+            parent.dismiss()
+        }
+    }
+    
+    private func processImage(_ image: UIImage) {
+        Task {
+            do {
+                let result = try await detectionViewModel.analyzeImage(image)
+                await MainActor.run {
+                    showingImageAnalysis = true
+                }
+            } catch {
+                await MainActor.run {
+                    // Handle error
+                    print("Analysis failed: \(error)")
+                }
+            }
         }
     }
 }
 
+// MARK: - Photo Library View
 struct PhotoLibraryView: UIViewControllerRepresentable {
-    @Binding var selectedImage: UIImage?
-    @Environment(\.presentationMode) var presentationMode
+    @ObservedObject var detectionViewModel: DetectionViewModel
+    @Binding var showingImageAnalysis: Bool
+    @Environment(\.dismiss) private var dismiss
     
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
         picker.sourceType = .photoLibrary
-        picker.allowsEditing = true
+        picker.allowsEditing = false
         return picker
     }
     
@@ -71,37 +88,49 @@ struct PhotoLibraryView: UIViewControllerRepresentable {
         }
         
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let editedImage = info[.editedImage] as? UIImage {
-                parent.selectedImage = editedImage
-            } else if let originalImage = info[.originalImage] as? UIImage {
-                parent.selectedImage = originalImage
+            if let image = info[.originalImage] as? UIImage {
+                parent.processImage(image)
             }
-            
-            parent.presentationMode.wrappedValue.dismiss()
+            parent.dismiss()
         }
         
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.presentationMode.wrappedValue.dismiss()
+            parent.dismiss()
+        }
+    }
+    
+    private func processImage(_ image: UIImage) {
+        Task {
+            do {
+                let result = try await detectionViewModel.analyzeImage(image)
+                await MainActor.run {
+                    showingImageAnalysis = true
+                }
+            } catch {
+                await MainActor.run {
+                    // Handle error
+                    print("Analysis failed: \(error)")
+                }
+            }
         }
     }
 }
 
+// MARK: - Image Capture View
 struct ImageCaptureView: View {
-    @Binding var selectedImage: UIImage?
+    @ObservedObject var detectionViewModel: DetectionViewModel
+    @Binding var showingImageAnalysis: Bool
     @State private var showingCamera = false
     @State private var showingPhotoLibrary = false
-    @State private var showingImagePicker = false
-    @State private var sourceType: UIImagePickerController.SourceType = .camera
+    @State private var capturedImage: UIImage?
+    @State private var isAnalyzing = false
+    @State private var analysisError: String?
     
     var body: some View {
         VStack(spacing: 20) {
             // Header
             VStack(spacing: 8) {
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 50))
-                    .foregroundColor(.blue)
-                
-                Text("Capture Your Smile")
+                Text("📸 Capture Your Smile")
                     .font(.title2)
                     .fontWeight(.bold)
                 
@@ -110,154 +139,188 @@ struct ImageCaptureView: View {
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
-            .padding(.top, 40)
-            
-            Spacer()
+            .padding()
             
             // Image Preview
-            if let image = selectedImage {
+            if let image = capturedImage {
                 VStack(spacing: 16) {
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(maxHeight: 300)
                         .cornerRadius(12)
-                        .shadow(radius: 8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.blue, lineWidth: 2)
+                        )
                     
-                    Button("Retake Photo") {
-                        selectedImage = nil
+                    // Analysis Button
+                    Button(action: analyzeImage) {
+                        HStack {
+                            if isAnalyzing {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "magnifyingglass")
+                            }
+                            Text(isAnalyzing ? "Analyzing..." : "Analyze Image")
+                        }
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .cornerRadius(12)
                     }
-                    .foregroundColor(.red)
+                    .disabled(isAnalyzing)
                 }
             } else {
-                // Placeholder
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(height: 300)
-                    .overlay(
-                        VStack(spacing: 12) {
-                            Image(systemName: "photo")
-                                .font(.system(size: 40))
-                                .foregroundColor(.gray)
-                            Text("No image selected")
-                                .foregroundColor(.gray)
-                        }
-                    )
-            }
-            
-            Spacer()
-            
-            // Action Buttons
-            VStack(spacing: 16) {
-                if selectedImage == nil {
+                // Capture Options
+                VStack(spacing: 16) {
+                    Text("Choose how you'd like to capture your image:")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
                     VStack(spacing: 12) {
-                        Button(action: {
-                            sourceType = .camera
-                            showingImagePicker = true
-                        }) {
+                        Button(action: { showingCamera = true }) {
                             HStack {
-                                Image(systemName: "camera")
+                                Image(systemName: "camera.fill")
                                 Text("Take Photo")
                             }
+                            .font(.headline)
+                            .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color.blue)
-                            .foregroundColor(.white)
                             .cornerRadius(12)
                         }
                         
-                        Button(action: {
-                            sourceType = .photoLibrary
-                            showingImagePicker = true
-                        }) {
+                        Button(action: { showingPhotoLibrary = true }) {
                             HStack {
                                 Image(systemName: "photo.on.rectangle")
                                 Text("Choose from Library")
                             }
+                            .font(.headline)
+                            .foregroundColor(.blue)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.gray.opacity(0.2))
-                            .foregroundColor(.primary)
+                            .background(Color.blue.opacity(0.1))
                             .cornerRadius(12)
                         }
                     }
-                } else {
-                    Button("Analyze Photo") {
-                        // This will be handled by the parent view
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.green)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                    .fontWeight(.semibold)
                 }
             }
-            .padding(.horizontal)
-            .padding(.bottom, 40)
+            
+            // Error Message
+            if let error = analysisError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .multilineTextAlignment(.center)
+                    .padding()
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(8)
+            }
+            
+            Spacer()
         }
-        .sheet(isPresented: $showingImagePicker) {
-            if sourceType == .camera {
-                CameraView(selectedImage: $selectedImage)
-            } else {
-                PhotoLibraryView(selectedImage: $selectedImage)
+        .padding()
+        .sheet(isPresented: $showingCamera) {
+            CameraView(
+                detectionViewModel: detectionViewModel,
+                showingImageAnalysis: $showingImageAnalysis
+            )
+        }
+        .sheet(isPresented: $showingPhotoLibrary) {
+            PhotoLibraryView(
+                detectionViewModel: detectionViewModel,
+                showingImageAnalysis: $showingImageAnalysis
+            )
+        }
+    }
+    
+    private func analyzeImage() {
+        guard let image = capturedImage else { return }
+        
+        isAnalyzing = true
+        analysisError = nil
+        
+        Task {
+            do {
+                let result = try await detectionViewModel.analyzeImage(image)
+                await MainActor.run {
+                    isAnalyzing = false
+                    showingImageAnalysis = true
+                }
+            } catch {
+                await MainActor.run {
+                    isAnalyzing = false
+                    analysisError = error.localizedDescription
+                }
             }
         }
     }
 }
 
-// MARK: - Camera Permission Helper
+// MARK: - Camera Permission Manager
 class CameraPermissionManager: ObservableObject {
     @Published var permissionStatus: AVAuthorizationStatus = .notDetermined
     
     init() {
-        checkPermission()
+        checkPermissionStatus()
     }
     
-    func checkPermission() {
+    func checkPermissionStatus() {
         permissionStatus = AVCaptureDevice.authorizationStatus(for: .video)
     }
     
     func requestPermission() {
-        AVCaptureDevice.requestAccess(for: .video) { granted in
+        AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
             DispatchQueue.main.async {
-                self.permissionStatus = granted ? .authorized : .denied
+                self?.checkPermissionStatus()
             }
         }
     }
 }
 
+// MARK: - Camera Permission View
 struct CameraPermissionView: View {
-    @ObservedObject var permissionManager: CameraPermissionManager
+    @ObservedObject var cameraPermissionManager: CameraPermissionManager
     let onPermissionGranted: () -> Void
     
     var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.blue)
-            
-            Text("Camera Access Required")
+        VStack(spacing: 20) {
+            Text("📸 Camera Access Required")
                 .font(.title2)
                 .fontWeight(.bold)
+                .multilineTextAlignment(.center)
             
-            Text("DentalAI needs camera access to capture photos of your teeth for analysis.")
+            Text("DentalAI needs access to your camera to capture photos of your teeth for analysis.")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal)
             
             Button("Grant Permission") {
-                permissionManager.requestPermission()
+                cameraPermissionManager.requestPermission()
             }
+            .font(.headline)
+            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding()
             .background(Color.blue)
-            .foregroundColor(.white)
             .cornerRadius(12)
-            .padding(.horizontal)
+            
+            Button("Open Settings") {
+                if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(settingsURL)
+                }
+            }
+            .font(.subheadline)
+            .foregroundColor(.blue)
         }
-        .onChange(of: permissionManager.permissionStatus) { status in
+        .padding()
+        .onChange(of: cameraPermissionManager.permissionStatus) { status in
             if status == .authorized {
                 onPermissionGranted()
             }
@@ -265,6 +328,103 @@ struct CameraPermissionView: View {
     }
 }
 
-#Preview {
-    ImageCaptureView(selectedImage: .constant(nil))
+// MARK: - Image Quality Overlay
+struct ImageQualityOverlay: View {
+    let quality: ImageQuality
+    let suggestions: [String]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Image Quality")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                Text(quality.qualityLevel.emoji)
+                    .font(.title2)
+            }
+            
+            Text(quality.qualityLevel.displayName)
+                .font(.subheadline)
+                .foregroundColor(quality.qualityLevel.color)
+            
+            if !suggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Suggestions:")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                    
+                    ForEach(suggestions, id: \.self) { suggestion in
+                        Text("• \(suggestion)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(8)
+        .shadow(radius: 4)
+    }
+}
+
+// MARK: - Real-time Validation Overlay
+struct RealTimeValidationOverlay: View {
+    let validation: RealTimeValidationResult
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Real-time Validation")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                if validation.isReady {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                } else {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                }
+            }
+            
+            if validation.isReady {
+                Text("Ready for analysis")
+                    .font(.subheadline)
+                    .foregroundColor(.green)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Improve image quality:")
+                        .font(.subheadline)
+                        .foregroundColor(.orange)
+                    
+                    ForEach(validation.suggestions, id: \.self) { suggestion in
+                        Text("• \(suggestion)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(8)
+        .shadow(radius: 4)
+    }
+}
+
+// MARK: - Preview
+struct CameraView_Previews: PreviewProvider {
+    static var previews: some View {
+        ImageCaptureView(
+            detectionViewModel: DetectionViewModel(),
+            showingImageAnalysis: .constant(false)
+        )
+    }
 }

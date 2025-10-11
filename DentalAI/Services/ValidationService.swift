@@ -1,302 +1,310 @@
-import UIKit
 import Foundation
+import UIKit
+import Vision
+import CoreImage
 
-class ValidationService: ObservableObject {
+// MARK: - Validation Service
+class ValidationService {
+    
+    // MARK: - Properties
+    private let minImageSize: CGSize = CGSize(width: 224, height: 224)
+    private let maxImageSize: CGSize = CGSize(width: 4096, height: 4096)
+    private let minQualityThreshold: Float = 0.4
+    private let minTeethAreaRatio: Float = 0.1
     
     // MARK: - Image Validation
     func validateImage(_ image: UIImage) -> ValidationResult {
-        var issues: [String] = []
+        var errors: [ValidationError] = []
         var warnings: [String] = []
         
         // Check image size
-        let size = image.size
-        if size.width < 500 || size.height < 500 {
-            issues.append("Image resolution too low (minimum 500x500 pixels)")
+        if image.size.width < minImageSize.width || image.size.height < minImageSize.height {
+            errors.append(.imageTooSmall)
+        }
+        
+        if image.size.width > maxImageSize.width || image.size.height > maxImageSize.height {
+            errors.append(.imageTooLarge)
+        }
+        
+        // Check image format
+        guard let cgImage = image.cgImage else {
+            errors.append(.unsupportedFormat)
+            return ValidationResult(isValid: false, errors: errors, warnings: warnings)
         }
         
         // Check image quality
         let quality = assessImageQuality(image)
-        if quality.poor {
-            issues.append(contentsOf: quality.issues)
+        if quality.overallScore < minQualityThreshold {
+            errors.append(.poorQuality)
         }
         
-        // Check for common issues
-        if let brightness = calculateBrightness(image) {
-            if brightness < 0.2 {
-                issues.append("Image too dark for accurate analysis")
-            } else if brightness > 0.9 {
-                issues.append("Image too bright, may cause overexposure")
-            }
+        // Check for teeth detection
+        let teethDetection = detectTeethInImage(image)
+        if teethDetection.confidence < 0.3 {
+            errors.append(.noTeethDetected)
         }
         
-        if let contrast = calculateContrast(image) {
-            if contrast < 0.1 {
-                issues.append("Low contrast, may affect analysis accuracy")
-            }
+        // Check lighting conditions
+        let lighting = assessLighting(image)
+        if lighting.isPoorLighting {
+            warnings.append("Poor lighting detected. Results may be less accurate.")
         }
         
-        if let blur = calculateBlur(image) {
-            if blur > 0.6 {
-                issues.append("Image appears blurry, may affect analysis accuracy")
-            } else if blur > 0.4 {
-                warnings.append("Image is slightly blurry, consider retaking")
-            }
+        // Check for blur
+        if quality.blur > 0.7 {
+            errors.append(.imageTooBlurry)
         }
         
-        // Check for dental-specific issues
-        let dentalIssues = validateDentalImage(image)
-        issues.append(contentsOf: dentalIssues.issues)
-        warnings.append(contentsOf: dentalIssues.warnings)
-        
-        let isValid = issues.isEmpty
-        let severity: ValidationSeverity = issues.isEmpty ? (warnings.isEmpty ? .none : .warning) : .error
-        
-        return ValidationResult(
-            isValid: isValid,
-            severity: severity,
-            issues: issues,
-            warnings: warnings,
-            suggestions: generateSuggestions(issues: issues, warnings: warnings)
-        )
+        let isValid = errors.isEmpty
+        return ValidationResult(isValid: isValid, errors: errors, warnings: warnings)
     }
     
-    // MARK: - User Input Validation
+    // MARK: - User Profile Validation
     func validateUserProfile(_ profile: UserProfile) -> ValidationResult {
-        var issues: [String] = []
+        var errors: [ValidationError] = []
         var warnings: [String] = []
         
-        // Validate name
-        if profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            issues.append("Name cannot be empty")
-        } else if profile.name.count < 2 {
-            issues.append("Name must be at least 2 characters long")
-        } else if profile.name.count > 50 {
-            issues.append("Name cannot exceed 50 characters")
+        // Check age
+        if let age = profile.age {
+            if age < 0 || age > 150 {
+                errors.append(.validationFailed)
+                warnings.append("Invalid age provided")
+            }
         }
         
-        // Validate age
-        if profile.age < 0 {
-            issues.append("Age cannot be negative")
-        } else if profile.age > 150 {
-            issues.append("Age appears to be invalid")
-        } else if profile.age < 5 {
-            warnings.append("App is designed for users 5 years and older")
+        // Check preferences
+        if profile.preferences.isEmpty {
+            warnings.append("No preferences set")
         }
         
-        // Validate dental history
-        if profile.dentalHistory.count > 100 {
-            warnings.append("Large number of analysis results may affect app performance")
+        // Check analysis history
+        if profile.analysisHistory.isEmpty {
+            warnings.append("No analysis history available")
         }
         
-        let isValid = issues.isEmpty
-        let severity: ValidationSeverity = issues.isEmpty ? (warnings.isEmpty ? .none : .warning) : .error
-        
-        return ValidationResult(
-            isValid: isValid,
-            severity: severity,
-            issues: issues,
-            warnings: warnings,
-            suggestions: generateUserProfileSuggestions(issues: issues, warnings: warnings)
-        )
+        let isValid = errors.isEmpty
+        return ValidationResult(isValid: isValid, errors: errors, warnings: warnings)
     }
     
     // MARK: - Analysis Result Validation
     func validateAnalysisResult(_ result: DentalAnalysisResult) -> ValidationResult {
-        var issues: [String] = []
+        var errors: [ValidationError] = []
         var warnings: [String] = []
         
-        // Validate confidence
+        // Check health score
+        if result.healthScore < 0 || result.healthScore > 100 {
+            errors.append(.validationFailed)
+            warnings.append("Invalid health score")
+        }
+        
+        // Check confidence
         if result.confidence < 0.0 || result.confidence > 1.0 {
-            issues.append("Invalid confidence value")
-        } else if result.confidence < 0.3 {
-            warnings.append("Low confidence in analysis results")
+            errors.append(.validationFailed)
+            warnings.append("Invalid confidence score")
         }
         
-        // Validate conditions
-        if result.conditions.isEmpty {
-            issues.append("No conditions detected")
-        } else if result.conditions.count > 10 {
-            warnings.append("Unusually high number of conditions detected")
+        // Check detected conditions
+        for (condition, confidence) in result.detectedConditions {
+            if confidence < 0.0 || confidence > 1.0 {
+                errors.append(.validationFailed)
+                warnings.append("Invalid confidence for \(condition.displayName)")
+            }
         }
         
-        // Validate health score
-        if result.overallHealthScore < 0 || result.overallHealthScore > 100 {
-            issues.append("Invalid health score")
+        // Check timestamp
+        if result.timestamp > Date() {
+            errors.append(.validationFailed)
+            warnings.append("Future timestamp detected")
         }
         
-        // Validate recommendations
-        if result.recommendations.isEmpty {
-            warnings.append("No recommendations generated")
-        }
-        
-        // Validate timestamp
-        let timeSinceAnalysis = Date().timeIntervalSince(result.timestamp)
-        if timeSinceAnalysis < 0 {
-            issues.append("Invalid analysis timestamp")
-        } else if timeSinceAnalysis > 86400 * 30 { // 30 days
-            warnings.append("Analysis result is older than 30 days")
-        }
-        
-        let isValid = issues.isEmpty
-        let severity: ValidationSeverity = issues.isEmpty ? (warnings.isEmpty ? .none : .warning) : .error
-        
-        return ValidationResult(
-            isValid: isValid,
-            severity: severity,
-            issues: issues,
-            warnings: warnings,
-            suggestions: generateAnalysisSuggestions(issues: issues, warnings: warnings)
-        )
+        let isValid = errors.isEmpty
+        return ValidationResult(isValid: isValid, errors: errors, warnings: warnings)
     }
     
-    // MARK: - Private Helper Methods
+    // MARK: - Image Quality Assessment
     private func assessImageQuality(_ image: UIImage) -> ImageQuality {
-        // This would use the ImageProcessor's quality assessment
-        // For now, return a basic assessment
-        return ImageQuality(poor: false, issues: [])
+        let processor = ImageProcessor()
+        return processor.assessImageQuality(image)
     }
     
-    private func calculateBrightness(_ image: UIImage) -> Double? {
-        // This would use the ImageProcessor's brightness calculation
-        // For now, return a placeholder
-        return 0.5
-    }
-    
-    private func calculateContrast(_ image: UIImage) -> Double? {
-        // This would use the ImageProcessor's contrast calculation
-        // For now, return a placeholder
-        return 0.3
-    }
-    
-    private func calculateBlur(_ image: UIImage) -> Double? {
-        // This would use the ImageProcessor's blur calculation
-        // For now, return a placeholder
-        return 0.2
-    }
-    
-    private func validateDentalImage(_ image: UIImage) -> DentalValidationResult {
-        var issues: [String] = []
-        var warnings: [String] = []
-        
-        // Check if image appears to contain teeth
-        // This is a simplified check - in reality, you'd use more sophisticated computer vision
-        let hasTeeth = detectTeethInImage(image)
-        if !hasTeeth {
-            issues.append("No teeth detected in image")
+    // MARK: - Teeth Detection
+    private func detectTeethInImage(_ image: UIImage) -> DentalValidationResult {
+        guard let cgImage = image.cgImage else {
+            return DentalValidationResult(confidence: 0.0, teethCount: 0, framing: .poor, lighting: .poor)
         }
         
-        // Check for proper framing
-        let framing = assessImageFraming(image)
-        if !framing.isGood {
-            issues.append(contentsOf: framing.issues)
-            warnings.append(contentsOf: framing.warnings)
+        // Use Vision framework for teeth detection
+        let request = VNDetectRectanglesRequest { request, error in
+            // Handle results
         }
         
-        // Check for lighting issues
-        let lighting = assessLighting(image)
-        if !lighting.isGood {
-            warnings.append(contentsOf: lighting.warnings)
+        request.minimumAspectRatio = 0.1
+        request.maximumAspectRatio = 1.0
+        request.minimumSize = 0.1
+        request.maximumObservations = 10
+        
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        
+        do {
+            try handler.perform([request])
+            
+            if let observations = request.results as? [VNRectangleObservation] {
+                let teethCount = observations.count
+                let confidence = observations.map { $0.confidence }.reduce(0, +) / Float(observations.count)
+                
+                return DentalValidationResult(
+                    confidence: confidence,
+                    teethCount: teethCount,
+                    framing: assessFraming(image, observations: observations),
+                    lighting: assessLighting(image)
+                )
+            }
+        } catch {
+            print("Teeth detection failed: \(error)")
         }
         
-        return DentalValidationResult(
-            issues: issues,
-            warnings: warnings,
-            hasTeeth: hasTeeth,
-            framing: framing,
-            lighting: lighting
-        )
+        return DentalValidationResult(confidence: 0.0, teethCount: 0, framing: .poor, lighting: .poor)
     }
     
-    private func detectTeethInImage(_ image: UIImage) -> Bool {
-        // Simplified teeth detection
-        // In a real implementation, this would use computer vision
-        return true // Placeholder
+    // MARK: - Framing Assessment
+    private func assessFraming(_ image: UIImage, observations: [VNRectangleObservation]) -> FramingAssessment {
+        let imageArea = image.size.width * image.size.height
+        var teethArea: Float = 0.0
+        
+        for observation in observations {
+            let rect = observation.boundingBox
+            let area = Float(rect.width * rect.height) * Float(imageArea)
+            teethArea += area
+        }
+        
+        let teethAreaRatio = teethArea / Float(imageArea)
+        
+        if teethAreaRatio > 0.3 {
+            return .excellent
+        } else if teethAreaRatio > 0.2 {
+            return .good
+        } else if teethAreaRatio > 0.1 {
+            return .fair
+        } else {
+            return .poor
+        }
     }
     
-    private func assessImageFraming(_ image: UIImage) -> FramingAssessment {
-        // Simplified framing assessment
-        // In a real implementation, this would analyze the image composition
-        return FramingAssessment(
-            isGood: true,
-            issues: [],
-            warnings: []
-        )
-    }
-    
+    // MARK: - Lighting Assessment
     private func assessLighting(_ image: UIImage) -> LightingAssessment {
-        // Simplified lighting assessment
-        // In a real implementation, this would analyze lighting conditions
-        return LightingAssessment(
-            isGood: true,
-            warnings: []
+        let processor = ImageProcessor()
+        let quality = processor.assessImageQuality(image)
+        
+        if quality.brightness > 0.7 && quality.contrast > 0.5 {
+            return .excellent
+        } else if quality.brightness > 0.5 && quality.contrast > 0.3 {
+            return .good
+        } else if quality.brightness > 0.3 && quality.contrast > 0.2 {
+            return .fair
+        } else {
+            return .poor
+        }
+    }
+    
+    // MARK: - Real-time Validation
+    func validateImageInRealTime(_ image: UIImage) -> RealTimeValidationResult {
+        let quality = assessImageQuality(image)
+        let lighting = assessLighting(image)
+        let framing = assessFraming(image, observations: [])
+        
+        var suggestions: [String] = []
+        
+        // Generate suggestions based on quality
+        if quality.brightness < 0.4 {
+            suggestions.append("Increase lighting for better results")
+        }
+        
+        if quality.contrast < 0.3 {
+            suggestions.append("Improve contrast by adjusting lighting angle")
+        }
+        
+        if quality.blur > 0.6 {
+            suggestions.append("Hold the camera steady to reduce blur")
+        }
+        
+        if quality.sharpness < 0.4 {
+            suggestions.append("Move closer to the teeth for better focus")
+        }
+        
+        return RealTimeValidationResult(
+            quality: quality,
+            lighting: lighting,
+            framing: framing,
+            suggestions: suggestions,
+            isReadyForAnalysis: quality.overallScore > minQualityThreshold
         )
     }
     
-    private func generateSuggestions(issues: [String], warnings: [String]) -> [String] {
-        var suggestions: [String] = []
+    // MARK: - Data Integrity Validation
+    func validateDataIntegrity() -> DataIntegrityResult {
+        var issues: [String] = []
+        var recommendations: [String] = []
         
-        if issues.contains(where: { $0.contains("resolution") }) {
-            suggestions.append("Use a higher resolution camera or move closer to your teeth")
+        // Check UserDefaults
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "userProfile") == nil {
+            issues.append("User profile not found")
+            recommendations.append("Create a new user profile")
         }
         
-        if issues.contains(where: { $0.contains("dark") }) {
-            suggestions.append("Ensure good lighting when taking the photo")
+        // Check Documents directory
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let imageDirectory = documentsPath.appendingPathComponent("DentalImages")
+        
+        if !FileManager.default.fileExists(atPath: imageDirectory.path) {
+            issues.append("Image directory not found")
+            recommendations.append("Create image directory")
         }
         
-        if issues.contains(where: { $0.contains("bright") }) {
-            suggestions.append("Avoid direct light or flash that may cause overexposure")
+        // Check for corrupted files
+        if let imageFiles = try? FileManager.default.contentsOfDirectory(at: imageDirectory, includingPropertiesForKeys: nil) {
+            for file in imageFiles {
+                if file.pathExtension.lowercased() == "jpg" || file.pathExtension.lowercased() == "png" {
+                    if let image = UIImage(contentsOfFile: file.path) {
+                        if image.size.width == 0 || image.size.height == 0 {
+                            issues.append("Corrupted image file: \(file.lastPathComponent)")
+                            recommendations.append("Remove corrupted file")
+                        }
+                    }
+                }
+            }
         }
         
-        if issues.contains(where: { $0.contains("blurry") }) {
-            suggestions.append("Hold the camera steady and ensure focus is on your teeth")
-        }
-        
-        if issues.contains(where: { $0.contains("contrast") }) {
-            suggestions.append("Ensure good contrast between teeth and background")
-        }
-        
-        if warnings.contains(where: { $0.contains("blurry") }) {
-            suggestions.append("Consider retaking the photo for better clarity")
-        }
-        
-        return suggestions
+        return DataIntegrityResult(
+            hasIssues: !issues.isEmpty,
+            issues: issues,
+            recommendations: recommendations
+        )
     }
     
-    private func generateUserProfileSuggestions(issues: [String], warnings: [String]) -> [String] {
+    // MARK: - Generate Suggestions
+    func generateSuggestions(for result: ValidationResult) -> [String] {
         var suggestions: [String] = []
         
-        if issues.contains(where: { $0.contains("Name") }) {
-            suggestions.append("Enter a valid name between 2 and 50 characters")
-        }
-        
-        if issues.contains(where: { $0.contains("Age") }) {
-            suggestions.append("Enter a valid age between 0 and 150 years")
-        }
-        
-        if warnings.contains(where: { $0.contains("5 years") }) {
-            suggestions.append("Consider consulting with a pediatric dentist")
-        }
-        
-        return suggestions
-    }
-    
-    private func generateAnalysisSuggestions(issues: [String], warnings: [String]) -> [String] {
-        var suggestions: [String] = []
-        
-        if issues.contains(where: { $0.contains("confidence") }) {
-            suggestions.append("Retake the photo with better lighting and focus")
-        }
-        
-        if issues.contains(where: { $0.contains("conditions") }) {
-            suggestions.append("Ensure the image clearly shows your teeth")
-        }
-        
-        if warnings.contains(where: { $0.contains("Low confidence") }) {
-            suggestions.append("Consider retaking the photo for more accurate analysis")
-        }
-        
-        if warnings.contains(where: { $0.contains("recommendations") }) {
-            suggestions.append("Contact a dental professional for personalized advice")
+        for error in result.errors {
+            switch error {
+            case .imageTooSmall:
+                suggestions.append("Use a higher resolution image (minimum 224x224 pixels)")
+            case .imageTooLarge:
+                suggestions.append("Use a smaller image (maximum 4096x4096 pixels)")
+            case .unsupportedFormat:
+                suggestions.append("Use JPEG or PNG format")
+            case .poorQuality:
+                suggestions.append("Use a clearer image with good lighting")
+            case .noTeethDetected:
+                suggestions.append("Ensure teeth are clearly visible in the image")
+            case .lightingTooPoor:
+                suggestions.append("Use better lighting or move to a brighter area")
+            case .imageTooBlurry:
+                suggestions.append("Hold the camera steady and ensure good focus")
+            case .validationFailed:
+                suggestions.append("Check your input data and try again")
+            }
         }
         
         return suggestions
@@ -306,327 +314,201 @@ class ValidationService: ObservableObject {
 // MARK: - Supporting Types
 struct ValidationResult {
     let isValid: Bool
-    let severity: ValidationSeverity
-    let issues: [String]
+    let errors: [ValidationError]
     let warnings: [String]
-    let suggestions: [String]
     
-    var hasIssues: Bool { !issues.isEmpty }
-    var hasWarnings: Bool { !warnings.isEmpty }
-    var hasSuggestions: Bool { !suggestions.isEmpty }
-}
-
-enum ValidationSeverity {
-    case none
-    case warning
-    case error
-    
-    var color: String {
-        switch self {
-        case .none: return "green"
-        case .warning: return "yellow"
-        case .error: return "red"
-        }
+    var hasErrors: Bool {
+        return !errors.isEmpty
     }
     
-    var icon: String {
-        switch self {
-        case .none: return "checkmark.circle.fill"
-        case .warning: return "exclamationmark.triangle.fill"
-        case .error: return "xmark.circle.fill"
-        }
+    var hasWarnings: Bool {
+        return !warnings.isEmpty
     }
 }
 
 struct DentalValidationResult {
-    let issues: [String]
-    let warnings: [String]
-    let hasTeeth: Bool
+    let confidence: Float
+    let teethCount: Int
     let framing: FramingAssessment
     let lighting: LightingAssessment
 }
 
-struct FramingAssessment {
-    let isGood: Bool
+enum FramingAssessment: String, CaseIterable {
+    case excellent = "excellent"
+    case good = "good"
+    case fair = "fair"
+    case poor = "poor"
+    
+    var displayName: String {
+        switch self {
+        case .excellent: return "Excellent"
+        case .good: return "Good"
+        case .fair: return "Fair"
+        case .poor: return "Poor"
+        }
+    }
+    
+    var emoji: String {
+        switch self {
+        case .excellent: return "🌟"
+        case .good: return "✅"
+        case .fair: return "⚠️"
+        case .poor: return "❌"
+        }
+    }
+}
+
+enum LightingAssessment: String, CaseIterable {
+    case excellent = "excellent"
+    case good = "good"
+    case fair = "fair"
+    case poor = "poor"
+    
+    var displayName: String {
+        switch self {
+        case .excellent: return "Excellent"
+        case .good: return "Good"
+        case .fair: return "Fair"
+        case .poor: return "Poor"
+        }
+    }
+    
+    var emoji: String {
+        switch self {
+        case .excellent: return "🌟"
+        case .good: return "✅"
+        case .fair: return "⚠️"
+        case .poor: return "❌"
+        }
+    }
+    
+    var isPoorLighting: Bool {
+        return self == .poor
+    }
+}
+
+struct RealTimeValidationResult {
+    let quality: ImageQuality
+    let lighting: LightingAssessment
+    let framing: FramingAssessment
+    let suggestions: [String]
+    let isReadyForAnalysis: Bool
+}
+
+struct DataIntegrityResult {
+    let hasIssues: Bool
     let issues: [String]
-    let warnings: [String]
-}
-
-struct LightingAssessment {
-    let isGood: Bool
-    let warnings: [String]
-}
-
-// MARK: - Validation Extensions
-extension ValidationService {
-    
-    // MARK: - Real-time Validation
-    func validateImageInRealTime(_ image: UIImage) -> ValidationResult {
-        // Simplified real-time validation for performance
-        var issues: [String] = []
-        var warnings: [String] = []
-        
-        // Quick size check
-        let size = image.size
-        if size.width < 300 || size.height < 300 {
-            issues.append("Image too small")
-        }
-        
-        // Quick quality check
-        if let brightness = calculateBrightness(image) {
-            if brightness < 0.1 || brightness > 0.95 {
-                issues.append("Poor lighting conditions")
-            }
-        }
-        
-        let isValid = issues.isEmpty
-        let severity: ValidationSeverity = issues.isEmpty ? (warnings.isEmpty ? .none : .warning) : .error
-        
-        return ValidationResult(
-            isValid: isValid,
-            severity: severity,
-            issues: issues,
-            warnings: warnings,
-            suggestions: generateSuggestions(issues: issues, warnings: warnings)
-        )
-    }
-    
-    // MARK: - Poor Lighting Detection
-    func detectPoorLightingConditions(_ image: UIImage) -> PoorLightingAnalysis {
-        var conditions: [PoorLightingCondition] = []
-        var severity: PoorLightingSeverity = .good
-        
-        // Check brightness
-        if let brightness = calculateBrightness(image) {
-            if brightness < 0.1 {
-                conditions.append(.tooDark)
-                severity = .poor
-            } else if brightness > 0.9 {
-                conditions.append(.tooBright)
-                severity = .poor
-            } else if brightness < 0.2 || brightness > 0.8 {
-                conditions.append(.suboptimal)
-                severity = .fair
-            }
-        }
-        
-        // Check contrast
-        if let contrast = calculateContrast(image) {
-            if contrast < 0.1 {
-                conditions.append(.lowContrast)
-                severity = .poor
-            } else if contrast < 0.2 {
-                conditions.append(.suboptimal)
-                severity = .fair
-            }
-        }
-        
-        // Check for specific lighting issues
-        if detectHarshShadows(image) {
-            conditions.append(.harshShadows)
-            severity = .fair
-        }
-        
-        if detectOverexposure(image) {
-            conditions.append(.overexposed)
-            severity = .poor
-        }
-        
-        if detectUnderexposure(image) {
-            conditions.append(.underexposed)
-            severity = .poor
-        }
-        
-        return PoorLightingAnalysis(
-            conditions: conditions,
-            severity: severity,
-            recommendations: generateLightingRecommendations(conditions: conditions)
-        )
-    }
-    
-    private func detectHarshShadows(_ image: UIImage) -> Bool {
-        // Simplified shadow detection
-        // In a real implementation, this would use more sophisticated computer vision
-        if let brightness = calculateBrightness(image) {
-            return brightness < 0.3 || brightness > 0.7
-        }
-        return false
-    }
-    
-    private func detectOverexposure(_ image: UIImage) -> Bool {
-        // Simplified overexposure detection
-        if let brightness = calculateBrightness(image) {
-            return brightness > 0.9
-        }
-        return false
-    }
-    
-    private func detectUnderexposure(_ image: UIImage) -> Bool {
-        // Simplified underexposure detection
-        if let brightness = calculateBrightness(image) {
-            return brightness < 0.1
-        }
-        return false
-    }
-    
-    private func generateLightingRecommendations(conditions: [PoorLightingCondition]) -> [String] {
-        var recommendations: [String] = []
-        
-        for condition in conditions {
-            switch condition {
-            case .tooDark:
-                recommendations.append("Move to a brighter area or turn on more lights")
-            case .tooBright:
-                recommendations.append("Move to a shaded area or reduce lighting")
-            case .lowContrast:
-                recommendations.append("Ensure good contrast between teeth and background")
-            case .harshShadows:
-                recommendations.append("Use diffused lighting to reduce shadows")
-            case .overexposed:
-                recommendations.append("Avoid direct light or flash")
-            case .underexposed:
-                recommendations.append("Increase lighting or move closer to light source")
-            case .suboptimal:
-                recommendations.append("Adjust lighting for better image quality")
-            }
-        }
-        
-        return recommendations
-    }
-    
-    // MARK: - Batch Validation
-    func validateAnalysisHistory(_ history: [DentalAnalysisResult]) -> [ValidationResult] {
-        return history.map { validateAnalysisResult($0) }
-    }
-    
-    // MARK: - Data Integrity Validation
-    func validateDataIntegrity() -> ValidationResult {
-        var issues: [String] = []
-        var warnings: [String] = []
-        
-        // Check for data consistency
-        let dataManager = DataManager.shared
-        let dataIssues = dataManager.validateData()
-        
-        if !dataIssues.isEmpty {
-            issues.append(contentsOf: dataIssues)
-        }
-        
-        // Check for storage issues
-        let storageInfo = getStorageInfo()
-        if storageInfo.usedSpace > storageInfo.totalSpace * 0.9 {
-            warnings.append("Storage space is running low")
-        }
-        
-        let isValid = issues.isEmpty
-        let severity: ValidationSeverity = issues.isEmpty ? (warnings.isEmpty ? .none : .warning) : .error
-        
-        return ValidationResult(
-            isValid: isValid,
-            severity: severity,
-            issues: issues,
-            warnings: warnings,
-            suggestions: generateDataIntegritySuggestions(issues: issues, warnings: warnings)
-        )
-    }
-    
-    private func getStorageInfo() -> StorageInfo {
-        // Simplified storage info
-        return StorageInfo(usedSpace: 100, totalSpace: 1000)
-    }
-    
-    private func generateDataIntegritySuggestions(issues: [String], warnings: [String]) -> [String] {
-        var suggestions: [String] = []
-        
-        if issues.contains(where: { $0.contains("orphaned") }) {
-            suggestions.append("Run data repair to clean up orphaned files")
-        }
-        
-        if issues.contains(where: { $0.contains("Missing") }) {
-            suggestions.append("Some analysis images may be missing")
-        }
-        
-        if warnings.contains(where: { $0.contains("Storage") }) {
-            suggestions.append("Consider clearing old analysis results to free up space")
-        }
-        
-        return suggestions
-    }
-}
-
-struct StorageInfo {
-    let usedSpace: Int64
-    let totalSpace: Int64
-}
-
-// MARK: - Poor Lighting Analysis Types
-struct PoorLightingAnalysis {
-    let conditions: [PoorLightingCondition]
-    let severity: PoorLightingSeverity
     let recommendations: [String]
-    
-    var hasIssues: Bool {
-        !conditions.isEmpty
-    }
-    
-    var isPoor: Bool {
-        severity == .poor
-    }
 }
 
-enum PoorLightingCondition: String, CaseIterable {
-    case tooDark = "Too Dark"
-    case tooBright = "Too Bright"
-    case lowContrast = "Low Contrast"
-    case harshShadows = "Harsh Shadows"
-    case overexposed = "Overexposed"
-    case underexposed = "Underexposed"
-    case suboptimal = "Suboptimal"
-    
-    var description: String {
-        switch self {
-        case .tooDark:
-            return "Image is too dark for accurate analysis"
-        case .tooBright:
-            return "Image is too bright, may cause overexposure"
-        case .lowContrast:
-            return "Low contrast between teeth and background"
-        case .harshShadows:
-            return "Harsh shadows affecting image quality"
-        case .overexposed:
-            return "Image is overexposed, details may be lost"
-        case .underexposed:
-            return "Image is underexposed, details may be lost"
-        case .suboptimal:
-            return "Lighting conditions are suboptimal"
+// MARK: - Image Quality Extension
+extension ValidationService {
+    private func calculateBrightness(_ image: UIImage) -> Float {
+        guard let cgImage = image.cgImage else { return 0.0 }
+        
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        
+        guard let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else { return 0.0 }
+        
+        var totalBrightness: Float = 0.0
+        let pixelCount = Float(width * height)
+        
+        for y in 0..<height {
+            for x in 0..<width {
+                let pixelIndex = y * bytesPerRow + x * bytesPerPixel
+                let r = Float(bytes[pixelIndex])
+                let g = Float(bytes[pixelIndex + 1])
+                let b = Float(bytes[pixelIndex + 2])
+                
+                let brightness = 0.299 * r + 0.587 * g + 0.114 * b
+                totalBrightness += brightness
+            }
         }
-    }
-}
-
-enum PoorLightingSeverity: String, CaseIterable {
-    case good = "Good"
-    case fair = "Fair"
-    case poor = "Poor"
-    
-    var color: String {
-        switch self {
-        case .good:
-            return "green"
-        case .fair:
-            return "yellow"
-        case .poor:
-            return "red"
-        }
+        
+        return totalBrightness / pixelCount / 255.0
     }
     
-    var icon: String {
-        switch self {
-        case .good:
-            return "checkmark.circle.fill"
-        case .fair:
-            return "exclamationmark.triangle.fill"
-        case .poor:
-            return "xmark.circle.fill"
+    private func calculateContrast(_ image: UIImage) -> Float {
+        guard let cgImage = image.cgImage else { return 0.0 }
+        
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        
+        guard let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else { return 0.0 }
+        
+        var grayPixels: [Float] = []
+        
+        for y in 0..<height {
+            for x in 0..<width {
+                let pixelIndex = y * bytesPerRow + x * bytesPerPixel
+                let r = Float(bytes[pixelIndex])
+                let g = Float(bytes[pixelIndex + 1])
+                let b = Float(bytes[pixelIndex + 2])
+                
+                let gray = 0.299 * r + 0.587 * g + 0.114 * b
+                grayPixels.append(gray)
+            }
         }
+        
+        let mean = grayPixels.reduce(0, +) / Float(grayPixels.count)
+        let variance = grayPixels.map { pow($0 - mean, 2) }.reduce(0, +) / Float(grayPixels.count)
+        let standardDeviation = sqrt(variance)
+        
+        return standardDeviation / 128.0
+    }
+    
+    private func calculateBlur(_ image: UIImage) -> Float {
+        guard let cgImage = image.cgImage else { return 1.0 }
+        
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        
+        guard let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else { return 1.0 }
+        
+        var grayPixels = [Float](repeating: 0, count: width * height)
+        for y in 0..<height {
+            for x in 0..<width {
+                let pixelIndex = y * bytesPerRow + x * bytesPerPixel
+                let r = Float(bytes[pixelIndex])
+                let g = Float(bytes[pixelIndex + 1])
+                let b = Float(bytes[pixelIndex + 2])
+                
+                let gray = 0.299 * r + 0.587 * g + 0.114 * b
+                grayPixels[y * width + x] = gray
+            }
+        }
+        
+        var gradientSum: Float = 0.0
+        let count = Float((width - 1) * (height - 1))
+        
+        for y in 0..<(height - 1) {
+            for x in 0..<(width - 1) {
+                let current = grayPixels[y * width + x]
+                let right = grayPixels[y * width + (x + 1)]
+                let bottom = grayPixels[(y + 1) * width + x]
+                
+                let gradientX = right - current
+                let gradientY = bottom - current
+                let magnitude = sqrt(gradientX * gradientX + gradientY * gradientY)
+                
+                gradientSum += magnitude
+            }
+        }
+        
+        let averageGradient = gradientSum / count
+        return min(1.0, max(0.0, 1.0 - (averageGradient / 50.0)))
     }
 }

@@ -1,435 +1,484 @@
 import XCTest
-import CoreGraphics
+import UIKit
 @testable import DentalAI
 
 // MARK: - Detection Tests
 class DetectionTests: XCTestCase {
     
-    var testImage: CGImage!
+    var detectionViewModel: DetectionViewModel!
+    var dentalAnalysisEngine: DentalAnalysisEngine!
+    var imageProcessor: ImageProcessor!
+    var validationService: ValidationService!
     
-    override func setUp() {
-        super.setUp()
-        testImage = createTestImage()
+    override func setUpWithError() throws {
+        detectionViewModel = DetectionViewModel()
+        dentalAnalysisEngine = DentalAnalysisEngine()
+        imageProcessor = ImageProcessor()
+        validationService = ValidationService()
     }
     
-    override func tearDown() {
-        testImage = nil
-        super.tearDown()
+    override func tearDownWithError() throws {
+        detectionViewModel = nil
+        dentalAnalysisEngine = nil
+        imageProcessor = nil
+        validationService = nil
     }
     
-    // MARK: - Test Image Creation
-    private func createTestImage() -> CGImage {
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let context = CGContext(
-            data: nil,
-            width: 100,
-            height: 100,
-            bitsPerComponent: 8,
-            bytesPerRow: 400,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    // MARK: - Image Processing Tests
+    func testImageEnhancement() throws {
+        // Create a test image
+        let testImage = createTestImage(size: CGSize(width: 224, height: 224))
+        
+        // Test image enhancement
+        let enhancedImage = imageProcessor.enhanceImage(testImage)
+        
+        XCTAssertNotNil(enhancedImage, "Enhanced image should not be nil")
+        XCTAssertEqual(enhancedImage?.size, testImage.size, "Enhanced image should maintain original size")
+    }
+    
+    func testImageResizing() throws {
+        let testImage = createTestImage(size: CGSize(width: 500, height: 500))
+        let targetSize = CGSize(width: 224, height: 224)
+        
+        let resizedImage = imageProcessor.resizeImage(testImage, to: targetSize)
+        
+        XCTAssertNotNil(resizedImage, "Resized image should not be nil")
+        XCTAssertEqual(resizedImage?.size, targetSize, "Resized image should match target size")
+    }
+    
+    func testImageQualityAssessment() throws {
+        let testImage = createTestImage(size: CGSize(width: 224, height: 224))
+        
+        let quality = imageProcessor.assessImageQuality(testImage)
+        
+        XCTAssertGreaterThanOrEqual(quality.overallScore, 0.0, "Overall score should be >= 0")
+        XCTAssertLessThanOrEqual(quality.overallScore, 1.0, "Overall score should be <= 1")
+        XCTAssertGreaterThanOrEqual(quality.sharpness, 0.0, "Sharpness should be >= 0")
+        XCTAssertLessThanOrEqual(quality.sharpness, 1.0, "Sharpness should be <= 1")
+        XCTAssertGreaterThanOrEqual(quality.brightness, 0.0, "Brightness should be >= 0")
+        XCTAssertLessThanOrEqual(quality.brightness, 1.0, "Brightness should be <= 1")
+        XCTAssertGreaterThanOrEqual(quality.contrast, 0.0, "Contrast should be >= 0")
+        XCTAssertLessThanOrEqual(quality.contrast, 1.0, "Contrast should be <= 1")
+        XCTAssertGreaterThanOrEqual(quality.blur, 0.0, "Blur should be >= 0")
+        XCTAssertLessThanOrEqual(quality.blur, 1.0, "Blur should be <= 1")
+    }
+    
+    func testToothColorAnalysis() throws {
+        let testImage = createTestImage(size: CGSize(width: 224, height: 224))
+        
+        let colorAnalysis = imageProcessor.analyzeToothColor(testImage)
+        
+        XCTAssertGreaterThanOrEqual(colorAnalysis.healthiness, 0.0, "Healthiness should be >= 0")
+        XCTAssertLessThanOrEqual(colorAnalysis.healthiness, 1.0, "Healthiness should be <= 1")
+        XCTAssertGreaterThanOrEqual(colorAnalysis.confidence, 0.0, "Confidence should be >= 0")
+        XCTAssertLessThanOrEqual(colorAnalysis.confidence, 1.0, "Confidence should be <= 1")
+    }
+    
+    func testEdgeDetection() throws {
+        let testImage = createTestImage(size: CGSize(width: 224, height: 224))
+        
+        let edgeAnalysis = imageProcessor.detectEdges(testImage)
+        
+        XCTAssertGreaterThanOrEqual(edgeAnalysis.edgeCount, 0, "Edge count should be >= 0")
+        XCTAssertGreaterThanOrEqual(edgeAnalysis.edgeStrength, 0.0, "Edge strength should be >= 0")
+        XCTAssertGreaterThanOrEqual(edgeAnalysis.confidence, 0.0, "Confidence should be >= 0")
+        XCTAssertLessThanOrEqual(edgeAnalysis.confidence, 1.0, "Confidence should be <= 1")
+    }
+    
+    // MARK: - Validation Tests
+    func testImageValidation() throws {
+        let testImage = createTestImage(size: CGSize(width: 224, height: 224))
+        
+        let validation = validationService.validateImage(testImage)
+        
+        XCTAssertNotNil(validation, "Validation result should not be nil")
+        XCTAssertNotNil(validation.isValid, "Validation should have isValid property")
+    }
+    
+    func testImageValidationWithSmallImage() throws {
+        let smallImage = createTestImage(size: CGSize(width: 100, height: 100))
+        
+        let validation = validationService.validateImage(smallImage)
+        
+        XCTAssertFalse(validation.isValid, "Small image should be invalid")
+        XCTAssertTrue(validation.errors.contains(.imageTooSmall), "Should contain imageTooSmall error")
+    }
+    
+    func testImageValidationWithLargeImage() throws {
+        let largeImage = createTestImage(size: CGSize(width: 5000, height: 5000))
+        
+        let validation = validationService.validateImage(largeImage)
+        
+        XCTAssertFalse(validation.isValid, "Large image should be invalid")
+        XCTAssertTrue(validation.errors.contains(.imageTooLarge), "Should contain imageTooLarge error")
+    }
+    
+    func testUserProfileValidation() throws {
+        let validProfile = UserProfile(age: 25, preferences: ["test"], analysisHistory: [])
+        
+        let validation = validationService.validateUserProfile(validProfile)
+        
+        XCTAssertTrue(validation.isValid, "Valid profile should pass validation")
+        XCTAssertTrue(validation.errors.isEmpty, "Valid profile should have no errors")
+    }
+    
+    func testUserProfileValidationWithInvalidAge() throws {
+        let invalidProfile = UserProfile(age: -1, preferences: [], analysisHistory: [])
+        
+        let validation = validationService.validateUserProfile(invalidProfile)
+        
+        XCTAssertFalse(validation.isValid, "Invalid profile should fail validation")
+        XCTAssertFalse(validation.errors.isEmpty, "Invalid profile should have errors")
+    }
+    
+    func testAnalysisResultValidation() throws {
+        let validResult = DentalAnalysisResult(
+            healthScore: 75,
+            detectedConditions: [.healthy: 0.8],
+            timestamp: Date(),
+            imageURL: nil,
+            analysisDuration: 2.0,
+            confidence: 0.7,
+            recommendations: []
         )
         
-        context?.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
-        context?.fill(CGRect(x: 0, y: 0, width: 100, height: 100))
+        let validation = validationService.validateAnalysisResult(validResult)
         
-        return context!.makeImage()!
+        XCTAssertTrue(validation.isValid, "Valid result should pass validation")
+        XCTAssertTrue(validation.errors.isEmpty, "Valid result should have no errors")
     }
     
-    // MARK: - DetectionFactory Tests
-    func testDetectionFactoryMake() {
-        let service = DetectionFactory.make()
-        XCTAssertNotNil(service, "DetectionFactory should return a service")
-        XCTAssertTrue(service is DetectionService, "Service should conform to DetectionService protocol")
-    }
-    
-    func testDetectionFactoryMakeWithMLFlag() {
-        let service = DetectionFactory.make(useMLDetection: true)
-        XCTAssertNotNil(service, "DetectionFactory should return a service when ML flag is true")
-    }
-    
-    func testDetectionFactoryMakeWithCVFlag() {
-        let service = DetectionFactory.make(useMLDetection: false)
-        XCTAssertNotNil(service, "DetectionFactory should return a service when ML flag is false")
-        XCTAssertTrue(service is CVDentitionService, "Should return CV service when ML flag is false")
-    }
-    
-    func testDetectionFactoryMakeWithFallback() {
-        let service = DetectionFactory.makeWithFallback()
-        XCTAssertNotNil(service, "DetectionFactory should return a service with fallback")
-    }
-    
-    func testDetectionFactoryValidateService() {
-        let mlService = MLDetectionService()
-        let cvService = CVDentitionService()
+    func testAnalysisResultValidationWithInvalidScore() throws {
+        let invalidResult = DentalAnalysisResult(
+            healthScore: 150, // Invalid score
+            detectedConditions: [.healthy: 0.8],
+            timestamp: Date(),
+            imageURL: nil,
+            analysisDuration: 2.0,
+            confidence: 0.7,
+            recommendations: []
+        )
         
-        let mlValid = DetectionFactory.validateService(mlService)
-        let cvValid = DetectionFactory.validateService(cvService)
+        let validation = validationService.validateAnalysisResult(invalidResult)
         
-        // CV service should always be valid
-        XCTAssertTrue(cvValid, "CV service should always be valid")
+        XCTAssertFalse(validation.isValid, "Invalid result should fail validation")
+        XCTAssertFalse(validation.errors.isEmpty, "Invalid result should have errors")
+    }
+    
+    // MARK: - Detection View Model Tests
+    func testDetectionViewModelInitialization() throws {
+        XCTAssertNotNil(detectionViewModel, "DetectionViewModel should be initialized")
+        XCTAssertFalse(detectionViewModel.isAnalyzing, "Should not be analyzing initially")
+        XCTAssertNil(detectionViewModel.lastAnalysisResult, "Should have no last analysis result initially")
+        XCTAssertTrue(detectionViewModel.analysisHistory.isEmpty, "Should have empty analysis history initially")
+        XCTAssertNil(detectionViewModel.errorMessage, "Should have no error message initially")
+        XCTAssertEqual(detectionViewModel.healthTrend, .stable, "Should have stable health trend initially")
+    }
+    
+    func testDetectionViewModelStatistics() throws {
+        // Add some test results
+        let testResult1 = DentalAnalysisResult(
+            healthScore: 80,
+            detectedConditions: [.healthy: 0.8],
+            timestamp: Date(),
+            imageURL: nil,
+            analysisDuration: 2.0,
+            confidence: 0.7,
+            recommendations: []
+        )
         
-        // ML service validity depends on model availability
-        XCTAssertNotNil(mlValid, "ML service validation should return a result")
-    }
-    
-    func testDetectionFactoryGetServiceInfo() {
-        let mlService = MLDetectionService()
-        let cvService = CVDentitionService()
+        let testResult2 = DentalAnalysisResult(
+            healthScore: 70,
+            detectedConditions: [.healthy: 0.7],
+            timestamp: Date(),
+            imageURL: nil,
+            analysisDuration: 1.5,
+            confidence: 0.6,
+            recommendations: []
+        )
         
-        let mlInfo = DetectionFactory.getServiceInfo(mlService)
-        let cvInfo = DetectionFactory.getServiceInfo(cvService)
+        detectionViewModel.analysisHistory = [testResult1, testResult2]
         
-        XCTAssertFalse(mlInfo.isEmpty, "ML service info should not be empty")
-        XCTAssertFalse(cvInfo.isEmpty, "CV service info should not be empty")
-        XCTAssertTrue(cvInfo.contains("CV Detection Service"), "CV service info should contain service type")
+        XCTAssertEqual(detectionViewModel.totalAnalyses, 2, "Should have 2 total analyses")
+        XCTAssertEqual(detectionViewModel.averageHealthScore, 75.0, accuracy: 0.1, "Should have correct average health score")
+        XCTAssertEqual(detectionViewModel.healthScoreRange, 70...80, "Should have correct health score range")
     }
     
-    func testDetectionFactoryCompareServices() {
-        let comparison = DetectionFactory.compareServices()
-        XCTAssertFalse(comparison.isEmpty, "Service comparison should not be empty")
-        XCTAssertTrue(comparison.contains("Service Comparison"), "Comparison should contain header")
-    }
-    
-    func testDetectionFactoryTestDetection() {
-        let cvService = CVDentitionService()
-        let result = DetectionFactory.testDetection(service: cvService, image: testImage)
+    func testDetectionViewModelHealthTrend() throws {
+        // Add test results with improving trend
+        let oldResult = DentalAnalysisResult(
+            healthScore: 60,
+            detectedConditions: [.healthy: 0.6],
+            timestamp: Calendar.current.date(byAdding: .day, value: -10, to: Date()) ?? Date(),
+            imageURL: nil,
+            analysisDuration: 2.0,
+            confidence: 0.6,
+            recommendations: []
+        )
         
-        switch result {
-        case .success(let detections):
-            XCTAssertNotNil(detections, "Detection should return results")
-        case .failure(let error):
-            XCTFail("CV detection should not fail: \(error.localizedDescription)")
-        }
-    }
-    
-    func testDetectionFactoryTestAllServices() {
-        let results = DetectionFactory.testAllServices(image: testImage)
+        let newResult = DentalAnalysisResult(
+            healthScore: 80,
+            detectedConditions: [.healthy: 0.8],
+            timestamp: Date(),
+            imageURL: nil,
+            analysisDuration: 1.5,
+            confidence: 0.8,
+            recommendations: []
+        )
         
-        XCTAssertTrue(results.keys.contains("ML"), "Results should contain ML service")
-        XCTAssertTrue(results.keys.contains("CV"), "Results should contain CV service")
+        detectionViewModel.analysisHistory = [newResult, oldResult]
+        detectionViewModel.updateHealthTrend()
         
-        // CV service should always succeed
-        if case .failure(let error) = results["CV"] {
-            XCTFail("CV service should not fail: \(error.localizedDescription)")
-        }
+        XCTAssertEqual(detectionViewModel.healthTrend, .improving, "Should detect improving trend")
     }
     
-    func testDetectionFactoryPerformanceTest() {
-        let cvService = CVDentitionService()
-        let duration = DetectionFactory.performanceTest(service: cvService, image: testImage, iterations: 5)
+    // MARK: - Data Manager Tests
+    func testDataManagerUserProfile() throws {
+        let dataManager = DataManager.shared
+        let testProfile = UserProfile(age: 30, preferences: ["test"], analysisHistory: [])
         
-        XCTAssertGreaterThan(duration, 0, "Performance test should return positive duration")
-        XCTAssertLessThan(duration, 10, "Performance test should complete within reasonable time")
-    }
-    
-    // MARK: - MLDetectionService Tests
-    func testMLDetectionServiceInitialization() {
-        let service = MLDetectionService()
-        XCTAssertNotNil(service, "MLDetectionService should initialize")
-        XCTAssertTrue(service is DetectionService, "MLDetectionService should conform to DetectionService")
-    }
-    
-    func testMLDetectionServiceModelStatus() {
-        let service = MLDetectionService()
-        let status = service.modelStatus
-        XCTAssertFalse(status.isEmpty, "Model status should not be empty")
-    }
-    
-    func testMLDetectionServiceModelAvailability() {
-        let service = MLDetectionService()
-        let isAvailable = service.isModelAvailable
+        dataManager.saveUserProfile(testProfile)
+        let savedProfile = dataManager.userProfile
         
-        // Model availability depends on whether model file exists
-        // This test just ensures the property is accessible
-        XCTAssertNotNil(isAvailable, "Model availability should be determinable")
+        XCTAssertEqual(savedProfile.age, 30, "Should save age correctly")
+        XCTAssertEqual(savedProfile.preferences, ["test"], "Should save preferences correctly")
     }
     
-    func testMLDetectionServiceDetectionWithoutModel() {
-        let service = MLDetectionService()
+    func testDataManagerAnalysisHistory() throws {
+        let dataManager = DataManager.shared
+        let testResult = DentalAnalysisResult(
+            healthScore: 75,
+            detectedConditions: [.healthy: 0.8],
+            timestamp: Date(),
+            imageURL: nil,
+            analysisDuration: 2.0,
+            confidence: 0.7,
+            recommendations: []
+        )
         
-        // If model is not available, should throw ModelUnavailableError
-        do {
-            _ = try service.detect(in: testImage)
-            // If we get here, either model is available or error handling is wrong
-        } catch ModelError.modelUnavailable {
-            // Expected behavior when model is not available
-            XCTAssertTrue(true, "Should throw ModelUnavailableError when model is not available")
-        } catch {
-            XCTFail("Should throw ModelUnavailableError, but got: \(error)")
-        }
-    }
-    
-    @available(iOS 13.0, *)
-    func testMLDetectionServiceAsyncDetection() async {
-        let service = MLDetectionService()
+        dataManager.addAnalysisResult(testResult)
+        let history = dataManager.analysisHistory
         
-        do {
-            _ = try await service.detectAsync(in: testImage)
-            // If we get here, model is available
-        } catch ModelError.modelUnavailable {
-            // Expected when model is not available
-            XCTAssertTrue(true, "Should throw ModelUnavailableError when model is not available")
-        } catch {
-            XCTFail("Should throw ModelUnavailableError, but got: \(error)")
-        }
+        XCTAssertEqual(history.count, 1, "Should have 1 analysis result")
+        XCTAssertEqual(history.first?.healthScore, 75, "Should save health score correctly")
     }
     
-    // MARK: - CVDentitionService Tests
-    func testCVDentitionServiceInitialization() {
-        let service = CVDentitionService()
-        XCTAssertNotNil(service, "CVDentitionService should initialize")
-        XCTAssertTrue(service is DetectionService, "CVDentitionService should conform to DetectionService")
-    }
-    
-    func testCVDentitionServiceDetection() {
-        let service = CVDentitionService()
+    func testDataManagerHealthStatistics() throws {
+        let dataManager = DataManager.shared
+        let testResult = DentalAnalysisResult(
+            healthScore: 75,
+            detectedConditions: [.healthy: 0.8],
+            timestamp: Date(),
+            imageURL: nil,
+            analysisDuration: 2.0,
+            confidence: 0.7,
+            recommendations: []
+        )
         
-        do {
-            let detections = try service.detect(in: testImage)
-            XCTAssertNotNil(detections, "CV detection should return results")
-            XCTAssertTrue(detections is [Detection], "Results should be array of Detection objects")
-            
-            // Check detection properties
-            for detection in detections {
-                XCTAssertFalse(detection.label.isEmpty, "Detection label should not be empty")
-                XCTAssertGreaterThanOrEqual(detection.confidence, 0.0, "Confidence should be non-negative")
-                XCTAssertLessThanOrEqual(detection.confidence, 1.0, "Confidence should be <= 1.0")
-                XCTAssertTrue(detection.boundingBox.width >= 0, "Bounding box width should be non-negative")
-                XCTAssertTrue(detection.boundingBox.height >= 0, "Bounding box height should be non-negative")
-            }
-        } catch {
-            XCTFail("CV detection should not fail: \(error.localizedDescription)")
-        }
-    }
-    
-    @available(iOS 13.0, *)
-    func testCVDentitionServiceAsyncDetection() async {
-        let service = CVDentitionService()
+        dataManager.addAnalysisResult(testResult)
+        let stats = dataManager.getHealthStatistics()
         
-        do {
-            let detections = try await service.detectAsync(in: testImage)
-            XCTAssertNotNil(detections, "Async CV detection should return results")
-        } catch {
-            XCTFail("Async CV detection should not fail: \(error.localizedDescription)")
-        }
+        XCTAssertEqual(stats.totalAnalyses, 1, "Should have 1 total analysis")
+        XCTAssertEqual(stats.avgScore, 75.0, accuracy: 0.1, "Should have correct average score")
     }
     
-    func testCVDentitionServicePerformance() {
-        let service = CVDentitionService()
+    // MARK: - Recommendation Engine Tests
+    func testRecommendationEngine() throws {
+        let recommendationEngine = RecommendationEngine()
+        let testResult = DentalAnalysisResult(
+            healthScore: 60,
+            detectedConditions: [.cavity: 0.8],
+            timestamp: Date(),
+            imageURL: nil,
+            analysisDuration: 2.0,
+            confidence: 0.7,
+            recommendations: []
+        )
+        
+        let userProfile = UserProfile(age: 25, preferences: [], analysisHistory: [])
+        let recommendations = recommendationEngine.generatePersonalizedRecommendations(for: testResult, userProfile: userProfile)
+        
+        XCTAssertFalse(recommendations.isEmpty, "Should generate recommendations")
+        XCTAssertTrue(recommendations.contains { $0.category == .professionalCare }, "Should include professional care recommendation")
+        XCTAssertTrue(recommendations.contains { $0.category == .homeCare }, "Should include home care recommendation")
+    }
+    
+    func testRecommendationEngineAgeBased() throws {
+        let recommendationEngine = RecommendationEngine()
+        let testResult = DentalAnalysisResult(
+            healthScore: 75,
+            detectedConditions: [.healthy: 0.8],
+            timestamp: Date(),
+            imageURL: nil,
+            analysisDuration: 2.0,
+            confidence: 0.7,
+            recommendations: []
+        )
+        
+        let youngProfile = UserProfile(age: 18, preferences: [], analysisHistory: [])
+        let youngRecommendations = recommendationEngine.generatePersonalizedRecommendations(for: testResult, userProfile: youngProfile)
+        
+        let oldProfile = UserProfile(age: 65, preferences: [], analysisHistory: [])
+        let oldRecommendations = recommendationEngine.generatePersonalizedRecommendations(for: testResult, userProfile: oldProfile)
+        
+        XCTAssertNotEqual(youngRecommendations.count, oldRecommendations.count, "Should generate different recommendations for different ages")
+    }
+    
+    // MARK: - Performance Tests
+    func testImageProcessingPerformance() throws {
+        let testImage = createTestImage(size: CGSize(width: 224, height: 224))
         
         measure {
-            do {
-                _ = try service.detect(in: testImage)
-            } catch {
-                XCTFail("CV detection should not fail: \(error.localizedDescription)")
-            }
+            let _ = imageProcessor.assessImageQuality(testImage)
         }
     }
     
-    // MARK: - Detection Model Tests
-    func testDetectionInitialization() {
-        let detection = Detection(
-            label: "Test",
-            confidence: 0.8,
-            boundingBox: CGRect(x: 0, y: 0, width: 100, height: 100)
-        )
+    func testValidationPerformance() throws {
+        let testImage = createTestImage(size: CGSize(width: 224, height: 224))
         
-        XCTAssertEqual(detection.label, "Test", "Label should match")
-        XCTAssertEqual(detection.confidence, 0.8, "Confidence should match")
-        XCTAssertEqual(detection.boundingBox, CGRect(x: 0, y: 0, width: 100, height: 100), "Bounding box should match")
-    }
-    
-    func testDetectionValidation() {
-        // Valid detection
-        let validDetection = Detection(
-            label: "Valid",
-            confidence: 0.5,
-            boundingBox: CGRect(x: 0, y: 0, width: 50, height: 50)
-        )
-        XCTAssertEqual(validDetection.label, "Valid")
-        
-        // Edge case: zero confidence
-        let zeroConfidenceDetection = Detection(
-            label: "Zero",
-            confidence: 0.0,
-            boundingBox: CGRect(x: 0, y: 0, width: 10, height: 10)
-        )
-        XCTAssertEqual(zeroConfidenceDetection.confidence, 0.0)
-        
-        // Edge case: maximum confidence
-        let maxConfidenceDetection = Detection(
-            label: "Max",
-            confidence: 1.0,
-            boundingBox: CGRect(x: 0, y: 0, width: 10, height: 10)
-        )
-        XCTAssertEqual(maxConfidenceDetection.confidence, 1.0)
-    }
-    
-    // MARK: - ModelError Tests
-    func testModelErrorCases() {
-        let errors: [ModelError] = [
-            .modelUnavailable,
-            .modelLoadFailed("Test error"),
-            .inferenceFailed("Test error"),
-            .invalidInput
-        ]
-        
-        for error in errors {
-            XCTAssertNotNil(error.errorDescription, "Error should have description")
-            XCTAssertNotNil(error.recoverySuggestion, "Error should have recovery suggestion")
+        measure {
+            let _ = validationService.validateImage(testImage)
         }
     }
     
-    func testModelErrorDescriptions() {
-        XCTAssertEqual(ModelError.modelUnavailable.errorDescription, "ML model is not available")
-        XCTAssertEqual(ModelError.modelLoadFailed("Test").errorDescription, "Failed to load ML model: Test")
-        XCTAssertEqual(ModelError.inferenceFailed("Test").errorDescription, "ML inference failed: Test")
-        XCTAssertEqual(ModelError.invalidInput.errorDescription, "Invalid input for ML model")
-    }
-    
-    func testModelErrorRecoverySuggestions() {
-        XCTAssertEqual(ModelError.modelUnavailable.recoverySuggestion, "Please ensure the ML model is properly installed")
-        XCTAssertEqual(ModelError.modelLoadFailed("Test").recoverySuggestion, "Try restarting the app or reinstalling the model")
-        XCTAssertEqual(ModelError.inferenceFailed("Test").recoverySuggestion, "Please try again with a different image")
-        XCTAssertEqual(ModelError.invalidInput.recoverySuggestion, "Please provide a valid image")
+    // MARK: - Helper Methods
+    private func createTestImage(size: CGSize) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { context in
+            // Create a simple test pattern
+            context.cgContext.setFillColor(UIColor.white.cgColor)
+            context.cgContext.fill(CGRect(origin: .zero, size: size))
+            
+            // Add some colored rectangles to simulate teeth
+            context.cgContext.setFillColor(UIColor.yellow.cgColor)
+            context.cgContext.fill(CGRect(x: 50, y: 50, width: 30, height: 40))
+            context.cgContext.fill(CGRect(x: 100, y: 50, width: 30, height: 40))
+            context.cgContext.fill(CGRect(x: 150, y: 50, width: 30, height: 40))
+        }
     }
 }
 
-// MARK: - FeatureFlags Tests
-class FeatureFlagsTests: XCTestCase {
+// MARK: - Integration Tests
+class IntegrationTests: XCTestCase {
     
-    override func setUp() {
-        super.setUp()
-        // Reset to defaults before each test
-        FeatureFlags.resetToDefaults()
+    var detectionViewModel: DetectionViewModel!
+    var dentalAnalysisEngine: DentalAnalysisEngine!
+    
+    override func setUpWithError() throws {
+        detectionViewModel = DetectionViewModel()
+        dentalAnalysisEngine = DentalAnalysisEngine()
     }
     
-    override func tearDown() {
-        // Reset to defaults after each test
-        FeatureFlags.resetToDefaults()
-        super.tearDown()
+    override func tearDownWithError() throws {
+        detectionViewModel = nil
+        dentalAnalysisEngine = nil
     }
     
-    func testFeatureFlagsDefaults() {
-        FeatureFlags.configureDefaults()
+    func testCompleteAnalysisPipeline() throws {
+        let testImage = createTestImage(size: CGSize(width: 224, height: 224))
+        let userProfile = UserProfile(age: 25, preferences: [], analysisHistory: [])
         
-        // Check that defaults are set
-        XCTAssertTrue(FeatureFlags.useMLDetection, "ML detection should be enabled by default")
-        XCTAssertTrue(FeatureFlags.useCVDetection, "CV detection should be enabled by default")
-        XCTAssertTrue(FeatureFlags.enableFallback, "Fallback should be enabled by default")
-        XCTAssertFalse(FeatureFlags.debugMode, "Debug mode should be disabled by default")
-        XCTAssertFalse(FeatureFlags.highPerformanceMode, "High performance mode should be disabled by default")
-        XCTAssertEqual(FeatureFlags.modelConfidenceThreshold, 0.5, "Confidence threshold should be 0.5 by default")
+        let expectation = XCTestExpectation(description: "Analysis completion")
+        
+        Task {
+            do {
+                let result = try await dentalAnalysisEngine.analyzeDentalImage(testImage, userProfile: userProfile)
+                
+                XCTAssertNotNil(result, "Analysis result should not be nil")
+                XCTAssertGreaterThanOrEqual(result.healthScore, 0, "Health score should be >= 0")
+                XCTAssertLessThanOrEqual(result.healthScore, 100, "Health score should be <= 100")
+                XCTAssertGreaterThanOrEqual(result.confidence, 0.0, "Confidence should be >= 0")
+                XCTAssertLessThanOrEqual(result.confidence, 1.0, "Confidence should be <= 1")
+                XCTAssertFalse(result.detectedConditions.isEmpty, "Should detect some conditions")
+                XCTAssertFalse(result.recommendations.isEmpty, "Should generate recommendations")
+                
+                expectation.fulfill()
+            } catch {
+                XCTFail("Analysis should not fail: \(error)")
+                expectation.fulfill()
+            }
+        }
+        
+        wait(for: [expectation], timeout: 10.0)
     }
     
-    func testFeatureFlagsMLDetection() {
-        FeatureFlags.useMLDetection = true
-        XCTAssertTrue(FeatureFlags.useMLDetection, "ML detection should be true")
+    func testDataFlow() throws {
+        let testImage = createTestImage(size: CGSize(width: 224, height: 224))
         
-        FeatureFlags.useMLDetection = false
-        XCTAssertFalse(FeatureFlags.useMLDetection, "ML detection should be false")
+        let expectation = XCTestExpectation(description: "Data flow completion")
+        
+        Task {
+            do {
+                let result = try await detectionViewModel.analyzeImage(testImage)
+                
+                XCTAssertNotNil(result, "Analysis result should not be nil")
+                XCTAssertEqual(detectionViewModel.lastAnalysisResult?.id, result.id, "Should update last analysis result")
+                XCTAssertEqual(detectionViewModel.analysisHistory.count, 1, "Should add to analysis history")
+                XCTAssertEqual(detectionViewModel.totalAnalyses, 1, "Should update total analyses count")
+                
+                expectation.fulfill()
+            } catch {
+                XCTFail("Analysis should not fail: \(error)")
+                expectation.fulfill()
+            }
+        }
+        
+        wait(for: [expectation], timeout: 10.0)
     }
     
-    func testFeatureFlagsCVDetection() {
-        FeatureFlags.useCVDetection = true
-        XCTAssertTrue(FeatureFlags.useCVDetection, "CV detection should be true")
-        
-        FeatureFlags.useCVDetection = false
-        XCTAssertFalse(FeatureFlags.useCVDetection, "CV detection should be false")
+    private func createTestImage(size: CGSize) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { context in
+            context.cgContext.setFillColor(UIColor.white.cgColor)
+            context.cgContext.fill(CGRect(origin: .zero, size: size))
+            
+            context.cgContext.setFillColor(UIColor.yellow.cgColor)
+            context.cgContext.fill(CGRect(x: 50, y: 50, width: 30, height: 40))
+            context.cgContext.fill(CGRect(x: 100, y: 50, width: 30, height: 40))
+            context.cgContext.fill(CGRect(x: 150, y: 50, width: 30, height: 40))
+        }
+    }
+}
+
+// MARK: - Mock Objects
+class MockDetectionService: DetectionService {
+    var mockDetections: [Detection] = []
+    var shouldThrowError = false
+    
+    func detect(in image: CGImage) throws -> [Detection] {
+        if shouldThrowError {
+            throw ModelError.inferenceFailed(NSError(domain: "Test", code: 1, userInfo: nil))
+        }
+        return mockDetections
     }
     
-    func testFeatureFlagsFallback() {
-        FeatureFlags.enableFallback = true
-        XCTAssertTrue(FeatureFlags.enableFallback, "Fallback should be true")
-        
-        FeatureFlags.enableFallback = false
-        XCTAssertFalse(FeatureFlags.enableFallback, "Fallback should be false")
-    }
+    var isModelAvailable: Bool = true
     
-    func testFeatureFlagsDebugMode() {
-        FeatureFlags.debugMode = true
-        XCTAssertTrue(FeatureFlags.debugMode, "Debug mode should be true")
+    var modelStatus: String = "Mock Detection Service"
+}
+
+// MARK: - Test Extensions
+extension DetectionViewModel {
+    func updateHealthTrend() {
+        guard analysisHistory.count >= 2 else {
+            healthTrend = .stable
+            return
+        }
         
-        FeatureFlags.debugMode = false
-        XCTAssertFalse(FeatureFlags.debugMode, "Debug mode should be false")
-    }
-    
-    func testFeatureFlagsHighPerformanceMode() {
-        FeatureFlags.highPerformanceMode = true
-        XCTAssertTrue(FeatureFlags.highPerformanceMode, "High performance mode should be true")
+        let recentResults = Array(analysisHistory.prefix(5))
+        let olderResults = Array(analysisHistory.suffix(5))
         
-        FeatureFlags.highPerformanceMode = false
-        XCTAssertFalse(FeatureFlags.highPerformanceMode, "High performance mode should be false")
-    }
-    
-    func testFeatureFlagsConfidenceThreshold() {
-        FeatureFlags.modelConfidenceThreshold = 0.7
-        XCTAssertEqual(FeatureFlags.modelConfidenceThreshold, 0.7, "Confidence threshold should be 0.7")
+        let recentAvg = recentResults.map { $0.healthScore }.reduce(0, +) / recentResults.count
+        let olderAvg = olderResults.map { $0.healthScore }.reduce(0, +) / olderResults.count
         
-        FeatureFlags.modelConfidenceThreshold = 0.3
-        XCTAssertEqual(FeatureFlags.modelConfidenceThreshold, 0.3, "Confidence threshold should be 0.3")
-    }
-    
-    func testFeatureFlagsResetToDefaults() {
-        // Set custom values
-        FeatureFlags.useMLDetection = false
-        FeatureFlags.useCVDetection = false
-        FeatureFlags.enableFallback = false
-        FeatureFlags.debugMode = true
-        FeatureFlags.highPerformanceMode = true
-        FeatureFlags.modelConfidenceThreshold = 0.8
+        let improvementRate = (recentAvg - olderAvg) / Float(olderAvg)
         
-        // Reset to defaults
-        FeatureFlags.resetToDefaults()
-        
-        // Check that values are reset
-        XCTAssertTrue(FeatureFlags.useMLDetection, "ML detection should be reset to default")
-        XCTAssertTrue(FeatureFlags.useCVDetection, "CV detection should be reset to default")
-        XCTAssertTrue(FeatureFlags.enableFallback, "Fallback should be reset to default")
-        XCTAssertFalse(FeatureFlags.debugMode, "Debug mode should be reset to default")
-        XCTAssertFalse(FeatureFlags.highPerformanceMode, "High performance mode should be reset to default")
-        XCTAssertEqual(FeatureFlags.modelConfidenceThreshold, 0.5, "Confidence threshold should be reset to default")
-    }
-    
-    func testFeatureFlagsStatus() {
-        let status = FeatureFlags.featureStatus
-        XCTAssertFalse(status.isEmpty, "Feature status should not be empty")
-        XCTAssertTrue(status.contains("Feature Flags Status"), "Status should contain header")
-        XCTAssertTrue(status.contains("ML Detection"), "Status should contain ML detection info")
-        XCTAssertTrue(status.contains("CV Detection"), "Status should contain CV detection info")
-    }
-    
-    func testFeatureFlagsEnvironment() {
-        let isDevelopment = FeatureFlags.isDevelopment
-        let isProduction = FeatureFlags.isProduction
-        
-        #if DEBUG
-        XCTAssertTrue(isDevelopment, "Should be development in DEBUG mode")
-        XCTAssertFalse(isProduction, "Should not be production in DEBUG mode")
-        #else
-        XCTAssertFalse(isDevelopment, "Should not be development in RELEASE mode")
-        XCTAssertTrue(isProduction, "Should be production in RELEASE mode")
-        #endif
-    }
-    
-    func testFeatureFlagsConfigureForEnvironment() {
-        FeatureFlags.configureForEnvironment()
-        
-        #if DEBUG
-        XCTAssertTrue(FeatureFlags.useMLDetection, "ML detection should be enabled in development")
-        XCTAssertTrue(FeatureFlags.useCVDetection, "CV detection should be enabled in development")
-        XCTAssertTrue(FeatureFlags.enableFallback, "Fallback should be enabled in development")
-        XCTAssertTrue(FeatureFlags.debugMode, "Debug mode should be enabled in development")
-        XCTAssertFalse(FeatureFlags.highPerformanceMode, "High performance mode should be disabled in development")
-        XCTAssertEqual(FeatureFlags.modelConfidenceThreshold, 0.3, "Confidence threshold should be lower in development")
-        #else
-        XCTAssertTrue(FeatureFlags.useMLDetection, "ML detection should be enabled in production")
-        XCTAssertTrue(FeatureFlags.useCVDetection, "CV detection should be enabled in production")
-        XCTAssertTrue(FeatureFlags.enableFallback, "Fallback should be enabled in production")
-        XCTAssertFalse(FeatureFlags.debugMode, "Debug mode should be disabled in production")
-        XCTAssertTrue(FeatureFlags.highPerformanceMode, "High performance mode should be enabled in production")
-        XCTAssertEqual(FeatureFlags.modelConfidenceThreshold, 0.5, "Confidence threshold should be higher in production")
-        #endif
+        if improvementRate > 0.1 {
+            healthTrend = .improving
+        } else if improvementRate < -0.1 {
+            healthTrend = .declining
+        } else {
+            healthTrend = .stable
+        }
     }
 }

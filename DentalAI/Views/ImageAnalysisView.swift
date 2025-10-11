@@ -1,398 +1,301 @@
 import SwiftUI
+import Charts
 
+// MARK: - Image Analysis View
 struct ImageAnalysisView: View {
-    let analysisResult: DentalAnalysisResult
+    let result: DentalAnalysisResult
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedTab = 0
-    @State private var showingRecommendations = false
-    @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Header
-                    headerView
+            VStack(spacing: 0) {
+                // Header
+                headerSection
+                
+                // Tab Bar
+                tabBarSection
+                
+                // Content
+                TabView(selection: $selectedTab) {
+                    overviewTab
+                        .tag(0)
                     
-                    // Image and Results
-                    imageAndResultsView
+                    recommendationsTab
+                        .tag(1)
                     
-                    // Tabs
-                    tabView
-                    
-                    // Content based on selected tab
-                    tabContentView
+                    detailsTab
+                        .tag(2)
                 }
-                .padding()
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
             }
             .navigationTitle("Analysis Results")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
             }
         }
     }
     
-    // MARK: - Header View
-    private var headerView: some View {
-        VStack(spacing: 12) {
-            // Health Score
-            HStack {
-                VStack(alignment: .leading) {
-                    Text("Overall Health Score")
-                        .font(.headline)
-                    Text("\(analysisResult.overallHealthScore)/100")
+    // MARK: - Header Section
+    private var headerSection: some View {
+        VStack(spacing: 16) {
+            // Health Score Circle
+            ZStack {
+                Circle()
+                    .stroke(Color.gray.opacity(0.3), lineWidth: 8)
+                    .frame(width: 120, height: 120)
+                
+                Circle()
+                    .trim(from: 0, to: CGFloat(result.healthScore) / 100)
+                    .stroke(healthScoreColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                    .frame(width: 120, height: 120)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 1.0), value: result.healthScore)
+                
+                VStack {
+                    Text("\(result.healthScore)")
                         .font(.title)
                         .fontWeight(.bold)
-                        .foregroundColor(healthScoreColor)
-                }
-                
-                Spacer()
-                
-                // Confidence
-                VStack(alignment: .trailing) {
-                    Text("Confidence")
-                        .font(.headline)
-                    Text("\(Int(analysisResult.confidence * 100))%")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.primary)
+                    
+                    Text("Health Score")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
             
-            // Severity Indicator
+            // Overall Severity
             HStack {
-                Image(systemName: severityIcon)
-                    .foregroundColor(severityColor)
-                Text("Severity: \(analysisResult.severity.rawValue)")
-                    .fontWeight(.semibold)
-                    .foregroundColor(severityColor)
-                Spacer()
-            }
-            .padding()
-            .background(severityColor.opacity(0.1))
-            .cornerRadius(8)
-        }
-    }
-    
-    // MARK: - Image and Results View
-    private var imageAndResultsView: some View {
-        VStack(spacing: 16) {
-            // Image
-            if let image = analysisResult.image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxHeight: 300)
-                    .cornerRadius(12)
-                    .shadow(radius: 8)
-            }
-            
-            // Detected Conditions
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Detected Conditions")
-                    .font(.headline)
-                    .padding(.horizontal)
+                Text(result.overallSeverity.emoji)
+                    .font(.title2)
                 
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 8) {
-                    ForEach(analysisResult.conditions) { condition in
-                        ConditionChip(condition: condition)
-                    }
+                Text(result.overallSeverity.displayName)
+                    .font(.headline)
+                    .foregroundColor(result.overallSeverity.color)
+            }
+            
+            // Analysis Info
+            HStack(spacing: 20) {
+                VStack {
+                    Text("\(Int(result.confidence * 100))%")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("Confidence")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
-                .padding(.horizontal)
+                
+                VStack {
+                    Text("\(Int(result.analysisDuration))s")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("Duration")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                VStack {
+                    Text(result.timestamp, style: .time)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("Time")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
         }
+        .padding()
+        .background(Color(.systemGray6))
     }
     
-    // MARK: - Tab View
-    private var tabView: some View {
+    // MARK: - Tab Bar Section
+    private var tabBarSection: some View {
         HStack(spacing: 0) {
-            TabButton(
-                title: "Overview",
-                isSelected: selectedTab == 0,
-                action: { selectedTab = 0 }
-            )
+            TabButton(title: "Overview", isSelected: selectedTab == 0) {
+                selectedTab = 0
+            }
             
-            TabButton(
-                title: "Recommendations",
-                isSelected: selectedTab == 1,
-                action: { selectedTab = 1 }
-            )
+            TabButton(title: "Recommendations", isSelected: selectedTab == 1) {
+                selectedTab = 1
+            }
             
-            TabButton(
-                title: "Details",
-                isSelected: selectedTab == 2,
-                action: { selectedTab = 2 }
-            )
+            TabButton(title: "Details", isSelected: selectedTab == 2) {
+                selectedTab = 2
+            }
         }
         .background(Color(.systemGray6))
-        .cornerRadius(8)
     }
     
-    // MARK: - Tab Content View
-    private var tabContentView: some View {
-        Group {
-            switch selectedTab {
-            case 0:
-                overviewContent
-            case 1:
-                recommendationsContent
-            case 2:
-                detailsContent
-            default:
-                overviewContent
-            }
-        }
-        .animation(.easeInOut, value: selectedTab)
-    }
-    
-    // MARK: - Overview Content
-    private var overviewContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Primary Condition
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Primary Condition")
-                    .font(.headline)
-                
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(conditionColor(analysisResult.primaryCondition))
-                    
-                    Text(analysisResult.primaryCondition.rawValue)
-                        .font(.title2)
+    // MARK: - Overview Tab
+    private var overviewTab: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Detected Conditions
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Detected Conditions")
+                        .font(.headline)
                         .fontWeight(.semibold)
                     
-                    Spacer()
+                    LazyVGrid(columns: [
+                        GridItem(.flexible()),
+                        GridItem(.flexible())
+                    ], spacing: 12) {
+                        ForEach(Array(result.detectedConditions.keys.sorted { $0.displayName < $1.displayName }), id: \.self) { condition in
+                            if let confidence = result.detectedConditions[condition] {
+                                ConditionChip(
+                                    condition: condition,
+                                    confidence: confidence
+                                )
+                            }
+                        }
+                    }
                 }
                 .padding()
-                .background(conditionColor(analysisResult.primaryCondition).opacity(0.1))
-                .cornerRadius(8)
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
                 
-                Text(analysisResult.primaryCondition.description)
-                    .font(.body)
-                    .foregroundColor(.secondary)
-            }
-            
-            // Analysis Summary
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Analysis Summary")
-                    .font(.headline)
-                
-                Text("Based on the image analysis, \(analysisSummary)")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-            }
-            
-            // Quick Actions
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Quick Actions")
-                    .font(.headline)
-                
-                VStack(spacing: 8) {
-                    QuickActionButton(
-                        title: "View Recommendations",
-                        icon: "list.bullet",
-                        action: { selectedTab = 1 }
-                    )
+                // Quick Actions
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Quick Actions")
+                        .font(.headline)
+                        .fontWeight(.semibold)
                     
-                    QuickActionButton(
-                        title: "Schedule Appointment",
-                        icon: "calendar",
-                        action: { /* Handle appointment scheduling */ }
-                    )
-                    
-                    QuickActionButton(
-                        title: "Share Results",
-                        icon: "square.and.arrow.up",
-                        action: { /* Handle sharing */ }
-                    )
+                    VStack(spacing: 8) {
+                        QuickActionButton(
+                            icon: "calendar",
+                            title: "Schedule Appointment",
+                            subtitle: "Book with a dentist",
+                            color: .blue
+                        )
+                        
+                        QuickActionButton(
+                            icon: "heart.text.square",
+                            title: "Track Progress",
+                            subtitle: "Monitor your health",
+                            color: .green
+                        )
+                        
+                        QuickActionButton(
+                            icon: "square.and.arrow.up",
+                            title: "Share Results",
+                            subtitle: "Send to your dentist",
+                            color: .orange
+                        )
+                    }
                 }
-            }
-        }
-    }
-    
-    // MARK: - Recommendations Content
-    private var recommendationsContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Recommendations")
-                .font(.headline)
-            
-            ForEach(analysisResult.recommendations) { recommendation in
-                RecommendationCard(recommendation: recommendation)
-            }
-        }
-    }
-    
-    // MARK: - Details Content
-    private var detailsContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Analysis Details
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Analysis Details")
-                    .font(.headline)
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
                 
-                DetailRow(title: "Analysis Date", value: DateFormatter.shortDate.string(from: analysisResult.timestamp))
-                DetailRow(title: "Confidence Level", value: "\(Int(analysisResult.confidence * 100))%")
-                DetailRow(title: "Conditions Detected", value: "\(analysisResult.conditions.count)")
-                DetailRow(title: "Overall Severity", value: analysisResult.severity.rawValue)
-            }
-            
-            // Condition Details
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Condition Details")
-                    .font(.headline)
-                
-                ForEach(analysisResult.conditions) { condition in
-                    ConditionDetailRow(condition: condition)
-                }
-            }
-            
-            // Technical Information
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Technical Information")
-                    .font(.headline)
-                
-                Text("This analysis was performed using advanced computer vision algorithms and rule-based detection systems. Results are for informational purposes only and should not replace professional dental consultation.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                // Health Trends Chart
+                if !result.detectedConditions.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Condition Confidence")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        Chart {
+                            ForEach(Array(result.detectedConditions.keys.sorted { $0.displayName < $1.displayName }), id: \.self) { condition in
+                                if let confidence = result.detectedConditions[condition] {
+                                    BarMark(
+                                        x: .value("Condition", condition.displayName),
+                                        y: .value("Confidence", confidence)
+                                    )
+                                    .foregroundStyle(condition.color)
+                                }
+                            }
+                        }
+                        .frame(height: 200)
+                    }
                     .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
+                    .background(Color(.systemBackground))
+                    .cornerRadius(12)
+                }
             }
+            .padding()
+        }
+    }
+    
+    // MARK: - Recommendations Tab
+    private var recommendationsTab: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                ForEach(result.recommendations) { recommendation in
+                    RecommendationCard(recommendation: recommendation)
+                }
+            }
+            .padding()
+        }
+    }
+    
+    // MARK: - Details Tab
+    private var detailsTab: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Analysis Metadata
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Analysis Details")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    VStack(spacing: 8) {
+                        DetailRow(title: "Processing Method", value: result.metadata.processingMethod)
+                        DetailRow(title: "Model Version", value: result.metadata.modelVersion)
+                        DetailRow(title: "Device Info", value: result.metadata.deviceInfo)
+                        DetailRow(title: "Image Size", value: "\(Int(result.metadata.imageSize.width))x\(Int(result.metadata.imageSize.height))")
+                        DetailRow(title: "Preprocessing Time", value: "\(String(format: "%.2f", result.metadata.preprocessingTime))s")
+                        DetailRow(title: "Inference Time", value: "\(String(format: "%.2f", result.metadata.inferenceTime))s")
+                        DetailRow(title: "Postprocessing Time", value: "\(String(format: "%.2f", result.metadata.postprocessingTime))s")
+                    }
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                
+                // Condition Details
+                if !result.detectedConditions.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Condition Details")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        VStack(spacing: 8) {
+                            ForEach(Array(result.detectedConditions.keys.sorted { $0.displayName < $1.displayName }), id: \.self) { condition in
+                                if let confidence = result.detectedConditions[condition] {
+                                    ConditionDetailRow(
+                                        condition: condition,
+                                        confidence: confidence
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(12)
+                }
+            }
+            .padding()
         }
     }
     
     // MARK: - Computed Properties
     private var healthScoreColor: Color {
-        switch analysisResult.overallHealthScore {
-        case 80...100:
-            return .green
-        case 60...79:
-            return .yellow
-        case 40...59:
-            return .orange
-        default:
-            return .red
-        }
-    }
-    
-    private var severityColor: Color {
-        switch analysisResult.severity {
-        case .none:
-            return .green
-        case .low:
-            return .yellow
-        case .medium:
-            return .orange
-        case .high:
-            return .red
-        }
-    }
-    
-    private var severityIcon: String {
-        switch analysisResult.severity {
-        case .none:
-            return "checkmark.circle.fill"
-        case .low:
-            return "exclamationmark.triangle.fill"
-        case .medium:
-            return "exclamationmark.triangle.fill"
-        case .high:
-            return "xmark.circle.fill"
-        }
-    }
-    
-    private var analysisSummary: String {
-        if analysisResult.conditions.contains(.healthy) && analysisResult.conditions.count == 1 {
-            return "your teeth appear to be in good health with no significant issues detected."
-        } else if analysisResult.conditions.count == 1 {
-            return "a potential \(analysisResult.primaryCondition.rawValue.lowercased()) was detected that may require attention."
-        } else {
-            return "multiple dental conditions were detected that may require professional evaluation."
-        }
-    }
-    
-    private func conditionColor(_ condition: DentalCondition) -> Color {
-        switch condition.severity {
-        case .none:
-            return .green
-        case .low:
-            return .yellow
-        case .medium:
-            return .orange
-        case .high:
-            return .red
+        switch result.healthScore {
+        case 80...100: return .green
+        case 60..<80: return .yellow
+        case 40..<60: return .orange
+        default: return .red
         }
     }
 }
 
-// MARK: - Supporting Views
-struct ConditionChip: View {
-    let condition: DentalCondition
-    
-    var body: some View {
-        HStack {
-            Image(systemName: conditionIcon)
-                .foregroundColor(conditionColor)
-            Text(condition.rawValue)
-                .font(.caption)
-                .fontWeight(.medium)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(conditionColor.opacity(0.1))
-        .foregroundColor(conditionColor)
-        .cornerRadius(16)
-    }
-    
-    private var conditionColor: Color {
-        switch condition.severity {
-        case .none:
-            return .green
-        case .low:
-            return .yellow
-        case .medium:
-            return .orange
-        case .high:
-            return .red
-        }
-    }
-    
-    private var conditionIcon: String {
-        switch condition {
-        case .cavity:
-            return "circle.dotted"
-        case .gingivitis:
-            return "heart.fill"
-        case .discoloration:
-            return "paintbrush.fill"
-        case .plaque:
-            return "circle.fill"
-        case .tartar:
-            return "circle.grid.2x2.fill"
-        case .deadTooth:
-            return "xmark.circle.fill"
-        case .rootCanal:
-            return "wrench.fill"
-        case .chipped:
-            return "scissors"
-        case .misaligned:
-            return "arrow.left.and.right"
-        case .healthy:
-            return "checkmark.circle.fill"
-        }
-    }
-}
-
+// MARK: - Tab Button
 struct TabButton: View {
     let title: String
     let isSelected: Bool
@@ -400,121 +303,193 @@ struct TabButton: View {
     
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.subheadline)
-                .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundColor(isSelected ? .white : .primary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(isSelected ? Color.blue : Color.clear)
-                .cornerRadius(8)
-        }
-    }
-}
-
-struct RecommendationCard: View {
-    let recommendation: Recommendation
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: priorityIcon)
-                    .foregroundColor(priorityColor)
-                
-                Text(recommendation.title)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                
-                Spacer()
-                
-                Text(recommendation.priority.rawValue)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(priorityColor.opacity(0.2))
-                    .foregroundColor(priorityColor)
-                    .cornerRadius(8)
-            }
-            
-            Text(recommendation.description)
-                .font(.body)
-                .foregroundColor(.secondary)
-            
-            if !recommendation.actionItems.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Action Items:")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    
-                    ForEach(recommendation.actionItems, id: \.self) { item in
-                        HStack(alignment: .top) {
-                            Text("•")
-                                .foregroundColor(.blue)
-                            Text(item)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-    }
-    
-    private var priorityColor: Color {
-        switch recommendation.priority {
-        case .immediate:
-            return .red
-        case .urgent:
-            return .orange
-        case .important:
-            return .yellow
-        case .general:
-            return .blue
-        }
-    }
-    
-    private var priorityIcon: String {
-        switch recommendation.priority {
-        case .immediate:
-            return "exclamationmark.triangle.fill"
-        case .urgent:
-            return "clock.fill"
-        case .important:
-            return "star.fill"
-        case .general:
-            return "info.circle.fill"
-        }
-    }
-}
-
-struct QuickActionButton: View {
-    let title: String
-    let icon: String
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: icon)
-                    .foregroundColor(.blue)
+            VStack(spacing: 4) {
                 Text(title)
-                    .foregroundColor(.primary)
+                    .font(.subheadline)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .foregroundColor(isSelected ? .blue : .secondary)
+                
+                Rectangle()
+                    .fill(isSelected ? Color.blue : Color.clear)
+                    .frame(height: 2)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Condition Chip
+struct ConditionChip: View {
+    let condition: DentalCondition
+    let confidence: Double
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(condition.emoji)
+                .font(.title2)
+            
+            Text(condition.displayName)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.center)
+            
+            Text("\(Int(confidence * 100))%")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(condition.color.opacity(0.1))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(condition.color.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Quick Action Button
+struct QuickActionButton: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let color: Color
+    
+    var body: some View {
+        Button(action: {}) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(color)
+                    .frame(width: 30)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
                 Spacer()
+                
                 Image(systemName: "chevron.right")
-                    .foregroundColor(.secondary)
                     .font(.caption)
+                    .foregroundColor(.secondary)
             }
             .padding()
             .background(Color(.systemGray6))
             .cornerRadius(8)
         }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
+// MARK: - Recommendation Card
+struct RecommendationCard: View {
+    let recommendation: Recommendation
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Text(recommendation.category.emoji)
+                    .font(.title2)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(recommendation.category.displayName)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Text(recommendation.priority.displayName)
+                        .font(.caption)
+                        .foregroundColor(recommendation.priority.color)
+                }
+                
+                Spacer()
+                
+                Button(action: { isExpanded.toggle() }) {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            // Description
+            Text(recommendation.personalizedText)
+                .font(.body)
+                .foregroundColor(.primary)
+            
+            // Expanded Content
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Action Items
+                    if !recommendation.actionItems.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Action Items:")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            
+                            ForEach(recommendation.actionItems, id: \.self) { item in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text("•")
+                                        .foregroundColor(.secondary)
+                                    Text(item)
+                                        .font(.body)
+                                        .foregroundColor(.primary)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Timeframe
+                    HStack {
+                        Text("Timeframe:")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                        
+                        Text(recommendation.timeframe)
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    // Estimated Cost
+                    if let cost = recommendation.estimatedCost {
+                        HStack {
+                            Text("Estimated Cost:")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            
+                            Text("$\(Int(cost))")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(.top, 8)
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(recommendation.category.color.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Detail Row
 struct DetailRow: View {
     let title: String
     let value: String
@@ -522,80 +497,81 @@ struct DetailRow: View {
     var body: some View {
         HStack {
             Text(title)
-                .foregroundColor(.secondary)
+                .font(.body)
+                .foregroundColor(.primary)
+            
             Spacer()
+            
             Text(value)
-                .fontWeight(.medium)
+                .font(.body)
+                .foregroundColor(.secondary)
         }
-        .padding(.vertical, 4)
     }
 }
 
+// MARK: - Condition Detail Row
 struct ConditionDetailRow: View {
     let condition: DentalCondition
+    let confidence: Double
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(condition.rawValue)
-                    .fontWeight(.medium)
-                Spacer()
-                Text(condition.severity.rawValue)
+        HStack {
+            Text(condition.emoji)
+                .font(.title3)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(condition.displayName)
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                
+                Text(condition.severity.displayName)
                     .font(.caption)
-                    .fontWeight(.medium)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(severityColor.opacity(0.2))
-                    .foregroundColor(severityColor)
-                    .cornerRadius(4)
+                    .foregroundColor(condition.severity.color)
             }
             
-            Text(condition.description)
-                .font(.caption)
-                .foregroundColor(.secondary)
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(Int(confidence * 100))%")
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                
+                Text("Confidence")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(.vertical, 4)
     }
-    
-    private var severityColor: Color {
-        switch condition.severity {
-        case .none:
-            return .green
-        case .low:
-            return .yellow
-        case .medium:
-            return .orange
-        case .high:
-            return .red
-        }
+}
+
+// MARK: - Preview
+struct ImageAnalysisView_Previews: PreviewProvider {
+    static var previews: some View {
+        let sampleResult = DentalAnalysisResult(
+            healthScore: 75,
+            detectedConditions: [
+                .healthy: 0.8,
+                .discoloration: 0.6,
+                .plaque: 0.4
+            ],
+            timestamp: Date(),
+            imageURL: nil,
+            analysisDuration: 2.5,
+            confidence: 0.7,
+            recommendations: [
+                Recommendation(
+                    category: .homeCare,
+                    priority: .medium,
+                    actionItems: ["Brush twice daily", "Use fluoride toothpaste"],
+                    personalizedText: "Your dental health is good but can be improved with proper care.",
+                    timeframe: "Daily"
+                )
+            ]
+        )
+        
+        ImageAnalysisView(result: sampleResult)
     }
-}
-
-// MARK: - Extensions
-extension DateFormatter {
-    static let shortDate: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
-        return formatter
-    }()
-}
-
-#Preview {
-    ImageAnalysisView(analysisResult: DentalAnalysisResult(
-        conditions: [.cavity, .gingivitis],
-        confidence: 0.85,
-        severity: .medium,
-        recommendations: [
-            Recommendation(
-                title: "Schedule Dental Appointment",
-                description: "Cavities require professional treatment.",
-                priority: .immediate,
-                category: .professional,
-                actionItems: ["Call your dentist", "Avoid sugary foods"]
-            )
-        ],
-        timestamp: Date(),
-        image: nil
-    ))
 }

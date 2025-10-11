@@ -1,98 +1,66 @@
 import Foundation
 import UIKit
+import os.log
 
-// MARK: - Performance Monitor Protocol
-protocol PerformanceMonitorProtocol {
-    func startTiming(_ operation: String)
-    func endTiming(_ operation: String)
-    func getPerformanceMetrics() -> PerformanceMetrics
-    func logMemoryUsage()
-    func logCPUUsage()
-}
-
-// MARK: - Performance Monitor Implementation
-class PerformanceMonitor: ObservableObject, PerformanceMonitorProtocol {
+// MARK: - Performance Monitor
+class PerformanceMonitor {
     
     // MARK: - Properties
-    private var timingOperations: [String: CFAbsoluteTime] = [:]
-    private var performanceHistory: [PerformanceEntry] = []
-    private let maxHistorySize = 100
+    static let shared = PerformanceMonitor()
+    private let logger = Logger(subsystem: "com.dentalai.app", category: "Performance")
     
-    // MARK: - Timing Operations
-    func startTiming(_ operation: String) {
-        timingOperations[operation] = CFAbsoluteTimeGetCurrent()
+    private var operationTimings: [String: TimeInterval] = [:]
+    private var operationCounts: [String: Int] = [:]
+    private var memoryUsage: [String: Int64] = [:]
+    private var cpuUsage: [String: Double] = [:]
+    
+    // MARK: - Operation Timing
+    func startTiming(operation: String) {
+        operationTimings[operation] = Date().timeIntervalSince1970
     }
     
-    func endTiming(_ operation: String) {
-        guard let startTime = timingOperations[operation] else {
-            print("Warning: No start time found for operation: \(operation)")
-            return
+    func endTiming(operation: String) -> TimeInterval {
+        guard let startTime = operationTimings[operation] else {
+            logger.warning("No start time found for operation: \(operation)")
+            return 0
         }
         
-        let endTime = CFAbsoluteTimeGetCurrent()
-        let duration = endTime - startTime
+        let duration = Date().timeIntervalSince1970 - startTime
+        operationTimings.removeValue(forKey: operation)
         
-        let entry = PerformanceEntry(
-            operation: operation,
-            duration: duration,
-            timestamp: Date(),
-            memoryUsage: getCurrentMemoryUsage(),
-            cpuUsage: getCurrentCPUUsage()
-        )
+        // Log performance
+        logger.info("Operation '\(operation)' completed in \(duration, privacy: .public) seconds")
         
-        performanceHistory.append(entry)
+        // Update counts
+        operationCounts[operation, default: 0] += 1
         
-        // Keep history size manageable
-        if performanceHistory.count > maxHistorySize {
-            performanceHistory.removeFirst()
-        }
-        
-        timingOperations.removeValue(forKey: operation)
-        
-        // Log performance if operation takes too long
-        if duration > 1.0 {
-            print("Performance Warning: \(operation) took \(String(format: "%.2f", duration)) seconds")
-        }
+        return duration
     }
     
-    // MARK: - Performance Metrics
-    func getPerformanceMetrics() -> PerformanceMetrics {
-        let totalOperations = performanceHistory.count
-        let averageDuration = performanceHistory.isEmpty ? 0.0 : performanceHistory.map { $0.duration }.reduce(0, +) / Double(totalOperations)
-        
-        let slowOperations = performanceHistory.filter { $0.duration > 1.0 }
-        let fastOperations = performanceHistory.filter { $0.duration < 0.5 }
-        
-        let operationBreakdown = Dictionary(grouping: performanceHistory, by: { $0.operation })
-            .mapValues { entries in
-                let durations = entries.map { $0.duration }
-                return OperationMetrics(
-                    count: entries.count,
-                    averageDuration: durations.reduce(0, +) / Double(durations.count),
-                    minDuration: durations.min() ?? 0.0,
-                    maxDuration: durations.max() ?? 0.0
-                )
-            }
-        
-        return PerformanceMetrics(
-            totalOperations: totalOperations,
-            averageDuration: averageDuration,
-            slowOperations: slowOperations.count,
-            fastOperations: fastOperations.count,
-            operationBreakdown: operationBreakdown,
-            memoryUsage: getCurrentMemoryUsage(),
-            cpuUsage: getCurrentCPUUsage(),
-            lastUpdated: Date()
-        )
+    func measureOperation<T>(_ operation: String, block: () throws -> T) rethrows -> T {
+        startTiming(operation: operation)
+        defer {
+            endTiming(operation: operation)
+        }
+        return try block()
+    }
+    
+    func measureAsyncOperation<T>(_ operation: String, block: () async throws -> T) async rethrows -> T {
+        startTiming(operation: operation)
+        defer {
+            endTiming(operation: operation)
+        }
+        return try await block()
     }
     
     // MARK: - Memory Monitoring
-    func logMemoryUsage() {
-        let memoryUsage = getCurrentMemoryUsage()
-        print("Memory Usage: \(String(format: "%.2f", memoryUsage)) MB")
+    func recordMemoryUsage(for operation: String) {
+        let memoryInfo = getMemoryInfo()
+        memoryUsage[operation] = memoryInfo.used
+        logger.info("Memory usage for '\(operation)': \(memoryInfo.used, privacy: .public) bytes")
     }
     
-    private func getCurrentMemoryUsage() -> Double {
+    func getMemoryInfo() -> MemoryInfo {
         var info = mach_task_basic_info()
         var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size)/4
         
@@ -106,19 +74,25 @@ class PerformanceMonitor: ObservableObject, PerformanceMonitorProtocol {
         }
         
         if kerr == KERN_SUCCESS {
-            return Double(info.resident_size) / 1024.0 / 1024.0 // Convert to MB
+            return MemoryInfo(
+                used: Int64(info.resident_size),
+                available: Int64(ProcessInfo.processInfo.physicalMemory),
+                total: Int64(ProcessInfo.processInfo.physicalMemory)
+            )
         } else {
-            return 0.0
+            logger.error("Failed to get memory info: \(kerr)")
+            return MemoryInfo(used: 0, available: 0, total: 0)
         }
     }
     
     // MARK: - CPU Monitoring
-    func logCPUUsage() {
-        let cpuUsage = getCurrentCPUUsage()
-        print("CPU Usage: \(String(format: "%.2f", cpuUsage))%")
+    func recordCPUUsage(for operation: String) {
+        let cpuInfo = getCPUInfo()
+        cpuUsage[operation] = cpuInfo.usage
+        logger.info("CPU usage for '\(operation)': \(cpuInfo.usage, privacy: .public)%")
     }
     
-    private func getCurrentCPUUsage() -> Double {
+    func getCPUInfo() -> CPUInfo {
         var info = processor_info_array_t.allocate(capacity: 1)
         var numCpuInfo: mach_msg_type_number_t = 0
         var numCpus: natural_t = 0
@@ -130,193 +104,288 @@ class PerformanceMonitor: ObservableObject, PerformanceMonitorProtocol {
                                         &numCpuInfo)
         
         if result == KERN_SUCCESS {
-            let cpuInfo = info.withMemoryRebound(to: processor_cpu_load_info_t.self, capacity: Int(numCpus)) {
-                $0
-            }
+            let cpuLoadInfo = info.withMemoryRebound(to: processor_cpu_load_info_t.self, capacity: 1) { $0 }
+            let usage = Double(cpuLoadInfo.pointee.cpu_ticks.0) / Double(cpuLoadInfo.pointee.cpu_ticks.1) * 100
             
-            var totalUser: UInt32 = 0
-            var totalSystem: UInt32 = 0
-            var totalIdle: UInt32 = 0
+            info.deallocate()
             
-            for i in 0..<Int(numCpus) {
-                totalUser += cpuInfo[i].cpu_ticks.0
-                totalSystem += cpuInfo[i].cpu_ticks.1
-                totalIdle += cpuInfo[i].cpu_ticks.2
-            }
-            
-            let total = totalUser + totalSystem + totalIdle
-            let usage = Double(totalUser + totalSystem) / Double(total) * 100.0
-            
-            return usage
+            return CPUInfo(
+                usage: min(100.0, max(0.0, usage)),
+                cores: Int(numCpus)
+            )
         } else {
-            return 0.0
+            logger.error("Failed to get CPU info: \(result)")
+            return CPUInfo(usage: 0.0, cores: 1)
         }
+    }
+    
+    // MARK: - Performance Metrics
+    func getPerformanceMetrics() -> PerformanceMetrics {
+        let memoryInfo = getMemoryInfo()
+        let cpuInfo = getCPUInfo()
+        
+        return PerformanceMetrics(
+            averageOperationTime: calculateAverageOperationTime(),
+            totalOperations: operationCounts.values.reduce(0, +),
+            memoryUsage: memoryInfo.used,
+            cpuUsage: cpuInfo.usage,
+            operationCounts: operationCounts,
+            memorySnapshots: memoryUsage,
+            cpuSnapshots: cpuUsage
+        )
+    }
+    
+    private func calculateAverageOperationTime() -> TimeInterval {
+        guard !operationCounts.isEmpty else { return 0 }
+        
+        let totalTime = operationTimings.values.reduce(0, +)
+        let totalCount = operationCounts.values.reduce(0, +)
+        
+        return totalCount > 0 ? totalTime / Double(totalCount) : 0
     }
     
     // MARK: - Performance Analysis
     func analyzePerformance() -> PerformanceAnalysis {
         let metrics = getPerformanceMetrics()
-        let slowestOperation = performanceHistory.max { $0.duration < $1.duration }
-        let fastestOperation = performanceHistory.min { $0.duration < $1.duration }
+        var issues: [PerformanceIssue] = []
+        var recommendations: [String] = []
         
-        let recommendations = generateRecommendations(metrics: metrics)
+        // Check for slow operations
+        for (operation, count) in operationCounts {
+            if let timing = operationTimings[operation] {
+                let averageTime = timing / Double(count)
+                if averageTime > 5.0 { // 5 seconds threshold
+                    issues.append(PerformanceIssue(
+                        type: .slowOperation,
+                        severity: .high,
+                        description: "Operation '\(operation)' is slow (\(averageTime)s average)",
+                        recommendation: "Optimize \(operation) operation"
+                    ))
+                }
+            }
+        }
+        
+        // Check memory usage
+        let memoryInfo = getMemoryInfo()
+        let memoryUsagePercent = Double(memoryInfo.used) / Double(memoryInfo.total) * 100
+        
+        if memoryUsagePercent > 80 {
+            issues.append(PerformanceIssue(
+                type: .highMemoryUsage,
+                severity: .high,
+                description: "High memory usage: \(memoryUsagePercent)%",
+                recommendation: "Optimize memory usage and consider memory management"
+            ))
+        }
+        
+        // Check CPU usage
+        let cpuInfo = getCPUInfo()
+        if cpuInfo.usage > 90 {
+            issues.append(PerformanceIssue(
+                type: .highCPUUsage,
+                severity: .medium,
+                description: "High CPU usage: \(cpuInfo.usage)%",
+                recommendation: "Optimize CPU-intensive operations"
+            ))
+        }
+        
+        // Generate recommendations
+        if issues.isEmpty {
+            recommendations.append("Performance is within acceptable limits")
+        } else {
+            recommendations.append("Consider optimizing slow operations")
+            recommendations.append("Monitor memory usage regularly")
+            recommendations.append("Profile CPU-intensive operations")
+        }
         
         return PerformanceAnalysis(
             metrics: metrics,
-            slowestOperation: slowestOperation,
-            fastestOperation: fastestOperation,
-            recommendations: recommendations
+            issues: issues,
+            recommendations: recommendations,
+            overallScore: calculateOverallScore(issues: issues)
         )
     }
     
-    private func generateRecommendations(metrics: PerformanceMetrics) -> [PerformanceRecommendation] {
-        var recommendations: [PerformanceRecommendation] = []
+    private func calculateOverallScore(issues: [PerformanceIssue]) -> Double {
+        let totalIssues = issues.count
+        let highSeverityIssues = issues.filter { $0.severity == .high }.count
+        let mediumSeverityIssues = issues.filter { $0.severity == .medium }.count
         
-        if metrics.averageDuration > 2.0 {
-            recommendations.append(PerformanceRecommendation(
-                type: .optimization,
-                priority: .high,
-                title: "Optimize Slow Operations",
-                description: "Average operation duration is \(String(format: "%.2f", metrics.averageDuration)) seconds. Consider optimizing image processing algorithms.",
-                action: "Review and optimize image processing pipeline"
-            ))
-        }
-        
-        if metrics.slowOperations > metrics.totalOperations * 0.2 {
-            recommendations.append(PerformanceRecommendation(
-                type: .optimization,
-                priority: .medium,
-                title: "Reduce Slow Operations",
-                description: "\(metrics.slowOperations) operations are taking longer than 1 second.",
-                action: "Implement background processing for heavy operations"
-            ))
-        }
-        
-        if metrics.memoryUsage > 100.0 {
-            recommendations.append(PerformanceRecommendation(
-                type: .memory,
-                priority: .high,
-                title: "High Memory Usage",
-                description: "Memory usage is \(String(format: "%.2f", metrics.memoryUsage)) MB. Consider implementing memory management.",
-                action: "Implement image caching and memory cleanup"
-            ))
-        }
-        
-        if metrics.cpuUsage > 80.0 {
-            recommendations.append(PerformanceRecommendation(
-                type: .cpu,
-                priority: .medium,
-                title: "High CPU Usage",
-                description: "CPU usage is \(String(format: "%.2f", metrics.cpuUsage))%. Consider optimizing algorithms.",
-                action: "Use background queues for CPU-intensive operations"
-            ))
-        }
-        
-        return recommendations
+        let score = max(0, 100 - (highSeverityIssues * 30) - (mediumSeverityIssues * 15) - (totalIssues * 5))
+        return Double(score)
     }
     
-    // MARK: - Export Performance Data
-    func exportPerformanceData() -> Data? {
-        let exportData = PerformanceExportData(
-            performanceHistory: performanceHistory,
-            metrics: getPerformanceMetrics(),
-            analysis: analyzePerformance(),
-            exportDate: Date()
-        )
+    // MARK: - Performance Logging
+    func logPerformanceSummary() {
+        let analysis = analyzePerformance()
         
-        return try? JSONEncoder().encode(exportData)
+        logger.info("Performance Summary:")
+        logger.info("Overall Score: \(analysis.overallScore, privacy: .public)")
+        logger.info("Total Operations: \(analysis.metrics.totalOperations, privacy: .public)")
+        logger.info("Memory Usage: \(analysis.metrics.memoryUsage, privacy: .public) bytes")
+        logger.info("CPU Usage: \(analysis.metrics.cpuUsage, privacy: .public)%")
+        
+        if !analysis.issues.isEmpty {
+            logger.warning("Performance Issues Found: \(analysis.issues.count, privacy: .public)")
+            for issue in analysis.issues {
+                logger.warning("Issue: \(issue.description, privacy: .public)")
+            }
+        }
+    }
+    
+    // MARK: - Performance Optimization
+    func optimizePerformance() -> [String] {
+        var optimizations: [String] = []
+        let analysis = analyzePerformance()
+        
+        for issue in analysis.issues {
+            switch issue.type {
+            case .slowOperation:
+                optimizations.append("Optimize \(issue.description)")
+            case .highMemoryUsage:
+                optimizations.append("Implement memory management strategies")
+            case .highCPUUsage:
+                optimizations.append("Optimize CPU-intensive operations")
+            case .memoryLeak:
+                optimizations.append("Fix memory leaks")
+            case .inefficientAlgorithm:
+                optimizations.append("Replace inefficient algorithms")
+            }
+        }
+        
+        return optimizations
+    }
+    
+    // MARK: - Performance Testing
+    func runPerformanceTest(_ testName: String, iterations: Int = 100, block: () throws -> Void) rethrows -> PerformanceTestResult {
+        var times: [TimeInterval] = []
+        var errors: [Error] = []
+        
+        for i in 0..<iterations {
+            let startTime = Date()
+            
+            do {
+                try block()
+                let endTime = Date()
+                times.append(endTime.timeIntervalSince(startTime))
+            } catch {
+                errors.append(error)
+            }
+        }
+        
+        let averageTime = times.reduce(0, +) / Double(times.count)
+        let minTime = times.min() ?? 0
+        let maxTime = times.max() ?? 0
+        
+        return PerformanceTestResult(
+            testName: testName,
+            iterations: iterations,
+            averageTime: averageTime,
+            minTime: minTime,
+            maxTime: maxTime,
+            successRate: Double(times.count) / Double(iterations),
+            errors: errors
+        )
+    }
+    
+    // MARK: - Cleanup
+    func clearMetrics() {
+        operationTimings.removeAll()
+        operationCounts.removeAll()
+        memoryUsage.removeAll()
+        cpuUsage.removeAll()
     }
 }
 
 // MARK: - Supporting Types
-struct PerformanceEntry: Identifiable, Codable {
-    let id = UUID()
-    let operation: String
-    let duration: Double
-    let timestamp: Date
-    let memoryUsage: Double
-    let cpuUsage: Double
+struct MemoryInfo {
+    let used: Int64
+    let available: Int64
+    let total: Int64
+    
+    var usagePercent: Double {
+        return Double(used) / Double(total) * 100
+    }
 }
 
-struct PerformanceMetrics: Codable {
+struct CPUInfo {
+    let usage: Double
+    let cores: Int
+}
+
+struct PerformanceMetrics {
+    let averageOperationTime: TimeInterval
     let totalOperations: Int
-    let averageDuration: Double
-    let slowOperations: Int
-    let fastOperations: Int
-    let operationBreakdown: [String: OperationMetrics]
-    let memoryUsage: Double
+    let memoryUsage: Int64
     let cpuUsage: Double
-    let lastUpdated: Date
+    let operationCounts: [String: Int]
+    let memorySnapshots: [String: Int64]
+    let cpuSnapshots: [String: Double]
 }
 
-struct OperationMetrics: Codable {
-    let count: Int
-    let averageDuration: Double
-    let minDuration: Double
-    let maxDuration: Double
+enum PerformanceIssueType {
+    case slowOperation
+    case highMemoryUsage
+    case highCPUUsage
+    case memoryLeak
+    case inefficientAlgorithm
 }
 
-struct PerformanceAnalysis: Codable {
-    let metrics: PerformanceMetrics
-    let slowestOperation: PerformanceEntry?
-    let fastestOperation: PerformanceEntry?
-    let recommendations: [PerformanceRecommendation]
+enum PerformanceSeverity {
+    case low
+    case medium
+    case high
+    case critical
 }
 
-struct PerformanceRecommendation: Identifiable, Codable {
-    let id = UUID()
-    let type: RecommendationType
-    let priority: Priority
-    let title: String
+struct PerformanceIssue {
+    let type: PerformanceIssueType
+    let severity: PerformanceSeverity
     let description: String
-    let action: String
-    
-    enum RecommendationType: String, Codable, CaseIterable {
-        case optimization = "Optimization"
-        case memory = "Memory"
-        case cpu = "CPU"
-        case network = "Network"
-    }
-    
-    enum Priority: String, Codable, CaseIterable {
-        case low = "Low"
-        case medium = "Medium"
-        case high = "High"
-        case critical = "Critical"
-    }
+    let recommendation: String
 }
 
-struct PerformanceExportData: Codable {
-    let performanceHistory: [PerformanceEntry]
+struct PerformanceAnalysis {
     let metrics: PerformanceMetrics
-    let analysis: PerformanceAnalysis
-    let exportDate: Date
+    let issues: [PerformanceIssue]
+    let recommendations: [String]
+    let overallScore: Double
 }
 
-// MARK: - Performance Monitoring Extensions
+struct PerformanceTestResult {
+    let testName: String
+    let iterations: Int
+    let averageTime: TimeInterval
+    let minTime: TimeInterval
+    let maxTime: TimeInterval
+    let successRate: Double
+    let errors: [Error]
+}
+
+// MARK: - Performance Extensions
 extension PerformanceMonitor {
-    
-    // MARK: - Image Processing Performance
-    func monitorImageProcessing<T>(_ operation: String, block: () async throws -> T) async throws -> T {
-        startTiming(operation)
-        defer { endTiming(operation) }
+    func monitorImageProcessing(_ image: UIImage, operation: String) -> UIImage? {
+        recordMemoryUsage(for: "\(operation)_start")
+        recordCPUUsage(for: "\(operation)_start")
         
-        return try await block()
+        let result = measureOperation(operation) {
+            // Simulate image processing
+            return image
+        }
+        
+        recordMemoryUsage(for: "\(operation)_end")
+        recordCPUUsage(for: "\(operation)_end")
+        
+        return result
     }
     
-    // MARK: - ML Inference Performance
-    func monitorMLInference<T>(_ operation: String, block: () async throws -> T) async throws -> T {
-        startTiming("ML_\(operation)")
-        defer { endTiming("ML_\(operation)") }
+    func monitorAnalysisOperation(_ operation: String, block: () async throws -> Void) async rethrows {
+        recordMemoryUsage(for: "\(operation)_start")
+        recordCPUUsage(for: "\(operation)_start")
         
-        return try await block()
-    }
-    
-    // MARK: - Network Performance
-    func monitorNetworkOperation<T>(_ operation: String, block: () async throws -> T) async throws -> T {
-        startTiming("Network_\(operation)")
-        defer { endTiming("Network_\(operation)") }
+        try await measureAsyncOperation(operation, block: block)
         
-        return try await block()
+        recordMemoryUsage(for: "\(operation)_end")
+        recordCPUUsage(for: "\(operation)_end")
     }
 }
