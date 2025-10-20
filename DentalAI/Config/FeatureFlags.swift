@@ -77,9 +77,8 @@ struct FeatureFlags {
     }
     
     static var hasBundledML: Bool {
-        // Check for any .mlmodel files (they get compiled to .mlmodelc)
-        return Bundle.main.url(forResource: "dental_model", withExtension: "mlmodel") != nil ||
-               Bundle.main.url(forResource: "dental_model", withExtension: "mlmodelc") != nil
+        // Check for compiled CoreML models (.mlmodelc)
+        return ModelLocator.hasCompiledMLModel(named: "DentalDetectionModel")
     }
     
     // MARK: - Current Configuration (with resource-based defaults)

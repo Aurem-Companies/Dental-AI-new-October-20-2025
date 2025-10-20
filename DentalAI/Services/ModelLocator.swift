@@ -32,3 +32,19 @@ struct ModelLocator {
         return bundledURL(name: name, ext: ext) != nil
     }
 }
+
+// MARK: - Preferred helpers (non-breaking additions)
+extension ModelLocator {
+    /// Compiled CoreML models are ".mlmodelc" at runtime, often placed under a "models" subdir.
+    static func bundledCompiledMLModelURL(name: String, subdir: String? = "models") -> URL? {
+        if let subdir = subdir,
+           let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc", subdirectory: subdir) {
+            return url
+        }
+        return Bundle.main.url(forResource: name, withExtension: "mlmodelc")
+    }
+
+    static func hasCompiledMLModel(named name: String, subdir: String? = "models") -> Bool {
+        bundledCompiledMLModelURL(name: name, subdir: subdir) != nil
+    }
+}

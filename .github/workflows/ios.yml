@@ -43,6 +43,19 @@ jobs:
             -scheme "${{ env.SCHEME }}" \
             -resolvePackageDependencies 2>&1 | tee -a build.log
 
+      - name: Validate Model Bundle
+        run: |
+          echo "🔍 Validating compiled CoreML model..."
+          MODEL_NAME="DentalDetectionModel"
+          MODEL_PATH="DentalAI.app/models/${MODEL_NAME}.mlmodelc"
+          
+          if [ ! -d "$MODEL_PATH" ]; then
+            echo "❌ Compiled model not found at: $MODEL_PATH"
+            echo "💡 Make sure your .mlmodel is in Copy Bundle Resources"
+            exit 1
+          fi
+          echo "✅ Found compiled model at: $MODEL_PATH"
+
       - name: Build (generic simulator, no signing)
         env:
           NSUnbufferedIO: "YES"

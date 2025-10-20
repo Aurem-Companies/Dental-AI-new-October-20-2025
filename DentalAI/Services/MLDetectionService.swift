@@ -12,15 +12,7 @@ class MLDetectionService: DetectionService, @unchecked Sendable {
     private let modelName = "DentalDetectionModel"
     private let confidenceThreshold: Float = 0.5
     private let nmsThreshold: Float = 0.4
-    
-    // MARK: - Model Availability (single source of truth)
-    var isModelAvailable: Bool {
-        return model != nil
-    }
-    
-    var modelStatus: String {
-        return isModelAvailable ? "Available" : "Not Available"
-    }
+    private let modelQueue = DispatchQueue(label: "com.dentalai.ml.model", qos: .userInitiated)
     
     // MARK: - Initialization
     init() {
@@ -29,25 +21,30 @@ class MLDetectionService: DetectionService, @unchecked Sendable {
     
     // MARK: - Model Loading
     private func loadModel() {
-        // Try to load CoreML model first
-        guard let modelURL = ModelLocator.bundledURL(name: modelName, ext: "mlmodel") else {
-            #if DEBUG
-            print("⚠️ CoreML model not found: \(modelName).mlmodel")
-            #endif
-            return
-        }
-        
-        do {
-            let coreMLModel = try MLModel(contentsOf: modelURL)
-            model = try VNCoreMLModel(for: coreMLModel)
-            #if DEBUG
-            print("✅ CoreML model loaded successfully: \(modelName).mlmodel")
-            #endif
-        } catch {
-            #if DEBUG
-            print("❌ Failed to load CoreML model: \(error)")
-            #endif
-            model = nil
+        modelQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Try to load compiled CoreML model
+            guard let modelURL = ModelLocator.bundledCompiledMLModelURL(name: self.modelName) else {
+                #if DEBUG
+                print("⚠️ Compiled CoreML model not found: \(self.modelName).mlmodelc")
+                #endif
+                return
+            }
+            
+            do {
+                let coreMLModel = try MLModel(contentsOf: modelURL)
+                let visionModel = try VNCoreMLModel(for: coreMLModel)
+                self.model = visionModel
+                #if DEBUG
+                print("✅ Compiled CoreML model loaded successfully: \(self.modelName).mlmodelc")
+                #endif
+            } catch {
+                #if DEBUG
+                print("❌ Failed to load compiled CoreML model: \(error)")
+                #endif
+                self.model = nil
+            }
         }
     }
     
@@ -145,6 +142,33 @@ class MLDetectionService: DetectionService, @unchecked Sendable {
     }
 }
 
+// MARK: - Availability (single source of truth)
+extension MLDetectionService {
+    enum AvailabilityStatus {
+        case available
+        case notAvailable
+    }
+
+    /// Name of the compiled CoreML model bundle (folder without extension).
+    private var compiledModelName: String { "DentalDetectionModel" }
+
+    var isModelAvailable: Bool {
+        let available = ModelLocator.hasCompiledMLModel(named: compiledModelName)
+        Log.ml.info("Checking compiled model '\(self.compiledModelName, privacy: .public)' available: \(available, privacy: .public)")
+        
+        if !available {
+            if let bundlePath = Bundle.main.bundlePath as String? {
+                Log.ml.error("Model not found. Bundle: \(bundlePath, privacy: .public)")
+            }
+        }
+        
+        return available
+    }
+
+    var modelStatus: AvailabilityStatus {
+        isModelAvailable ? .available : .notAvailable
+    }
+}
 
 // MARK: - Async Detection Extension
 extension MLDetectionService {
@@ -299,5 +323,16 @@ class ModelManager: ObservableObject {
     func reloadModel() {
         guard currentModel != nil else { return }
         // Implementation would reload the current model
+    }
+    
+    // MARK: - Deprecated Adapter (for backward compatibility)
+    @available(*, deprecated, message: "Use managerStatus")
+    var modelStatus: String {
+        managerStatus
+    }
+    
+    @available(*, deprecated, message: "Use isManagerAvailable")
+    var isModelAvailable: Bool {
+        isManagerAvailable
     }
 }
