@@ -35,6 +35,7 @@
 		A1234567890ABCDEF057 /* MLDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF058 /* MLDetectionService.swift */; };
 		A1234567890ABCDEF100 /* ModelLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF101 /* ModelLocator.swift */; };
 		A1234567890ABCDEF102 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF103 /* Log.swift */; };
+		A1234567890ABCDEF105 /* DataManager+AnalysisHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF106 /* DataManager+AnalysisHistory.swift */; };
 		A1234567890ABCDEF059 /* ONNXDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF060 /* ONNXDetectionService.swift */; };
 		A1234567890ABCDEF061 /* CVDentitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF062 /* CVDentitionService.swift */; };
 		A1234567890ABCDEF063 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF064 /* FeatureFlags.swift */; };
@@ -74,6 +75,7 @@
 		A1234567890ABCDEF058 /* MLDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLDetectionService.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF101 /* ModelLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelLocator.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF103 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
+		A1234567890ABCDEF106 /* DataManager+AnalysisHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataManager+AnalysisHistory.swift"; sourceTree = "<group>"; };
 		A1234567890ABCDEF060 /* ONNXDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ONNXDetectionService.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF062 /* CVDentitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CVDentitionService.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF064 /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
@@ -165,6 +167,7 @@
 				A1234567890ABCDEF045 /* UserFeedbackService.swift */,
 				A1234567890ABCDEF049 /* ValidationService.swift */,
 				A1234567890ABCDEF051 /* DataManager.swift */,
+				A1234567890ABCDEF106 /* DataManager+AnalysisHistory.swift */,
 				A1234567890ABCDEF054 /* DetectionFactory.swift */,
 				A1234567890ABCDEF058 /* MLDetectionService.swift */,
 				A1234567890ABCDEF101 /* ModelLocator.swift */,
@@ -299,6 +302,7 @@
 				A1234567890ABCDEF046 /* DetectionViewModel.swift in Sources */,
 				A1234567890ABCDEF048 /* ValidationService.swift in Sources */,
 				A1234567890ABCDEF050 /* DataManager.swift in Sources */,
+				A1234567890ABCDEF105 /* DataManager+AnalysisHistory.swift in Sources */,
 				A1234567890ABCDEF053 /* DetectionFactory.swift in Sources */,
 				A1234567890ABCDEF055 /* Detection.swift in Sources */,
 				A1234567890ABCDEF057 /* MLDetectionService.swift in Sources */,
