@@ -3,6 +3,8 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: macos-14
+    env:
+      SCHEME: DentalAI
     steps:
       - uses: actions/checkout@v4
 
@@ -19,29 +21,22 @@ jobs:
           chmod +x scripts/ci_list_schemes.sh || true
           ./scripts/ci_list_schemes.sh || true
 
-      - name: Detect workspace/project + scheme
+      - name: Detect workspace/project
         id: detect
         shell: bash
         run: |
           set -euo pipefail
           if [ -e "DentalAI.xcworkspace" ]; then
             echo "ws=-workspace DentalAI.xcworkspace" >> $GITHUB_OUTPUT
-            SCHEME=$(xcodebuild -list -workspace DentalAI.xcworkspace 2>/dev/null | awk -v RS= -F'\n' '/Schemes:/{getline; gsub(/^[ \t]+|[ \t]+$/,""); print; exit}')
           else
             echo "ws=-project DentalAI.xcodeproj" >> $GITHUB_OUTPUT
-            SCHEME=$(xcodebuild -list -project DentalAI.xcodeproj 2>/dev/null | awk -v RS= -F'\n' '/Schemes:/{getline; gsub(/^[ \t]+|[ \t]+$/,""); print; exit}')
           fi
-          echo "scheme=${SCHEME}" >> $GITHUB_OUTPUT
-          if [ -z "${SCHEME}" ]; then
-            echo "::error ::No shared scheme detected. Ensure DentalAI.xcodeproj/xcshareddata/xcschemes/*.xcscheme is committed."
-            exit 65
-          fi
-          echo "Detected scheme: ${SCHEME}"
+          echo "Using fixed scheme: ${{ env.SCHEME }}"
 
       - name: Resolve packages
         run: |
           xcodebuild ${{ steps.detect.outputs.ws }} \
-            -scheme "${{ steps.detect.outputs.scheme }}" \
+            -scheme "${{ env.SCHEME }}" \
             -resolvePackageDependencies
 
       - name: Build (generic simulator, no signing)
@@ -51,7 +46,7 @@ jobs:
           set -o pipefail
           : > build.log
           xcodebuild ${{ steps.detect.outputs.ws }} \
-            -scheme "${{ steps.detect.outputs.scheme }}" \
+            -scheme "${{ env.SCHEME }}" \
             -destination 'generic/platform=iOS Simulator' \
             -sdk iphonesimulator \
             CODE_SIGNING_ALLOWED=NO \
