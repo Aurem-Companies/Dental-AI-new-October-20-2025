@@ -1,0 +1,25 @@
+name: iOS CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Build
+        run: |
+          rm -rf ~/Library/Developer/Xcode/DerivedData
+          if [ -e "DentalAI.xcworkspace" ]; then
+            xcodebuild -workspace "DentalAI.xcworkspace" \
+                       -scheme "DentalAI" \
+                       -destination 'generic/platform=iOS Simulator' \
+                       clean build
+          else
+            xcodebuild -project "DentalAI.xcodeproj" \
+                       -scheme "DentalAI" \
+                       -destination 'generic/platform=iOS Simulator' \
+                       clean build
+          fi
