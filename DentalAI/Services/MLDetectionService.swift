@@ -3,7 +3,7 @@ import Foundation
 import CoreML
 #endif
 import Vision
-import os // for Logger interpolation
+import OSLog // for Logger
 
 // MARK: - ML Detection Service
 class MLDetectionService: DetectionService, @unchecked Sendable {
@@ -147,11 +147,12 @@ class MLDetectionService: DetectionService, @unchecked Sendable {
 extension MLDetectionService {
     enum AvailabilityStatus { case available, notAvailable }
 
-    /// Set this to your compiled .mlmodelc folder name.
-    private var compiledModelName: String { "DentalModel" } // <-- change if different
+    /// Set this to the **compiled** model folder name inside the app bundle (ends with `.mlmodelc` on disk).
+    private var compiledModelName: String { "DentalModel" } // <-- CHANGE if yours differs
 
     var isModelAvailable: Bool {
-        ModelLocator.hasCompiledMLModel(named: compiledModelName)
+        ModelLocator.modelExists(name: compiledModelName, ext: "mlmodelc")
+        // or: ModelLocator.hasCompiledMLModel(named: compiledModelName) if you added that helper
     }
 
     var modelStatus: AvailabilityStatus {
@@ -159,11 +160,9 @@ extension MLDetectionService {
     }
 
     func debugLogAvailabilityOnce() {
-        // Safe even if logger is optimized out
-        Log.ml.info("Compiled model '\(self.compiledModelName, privacy: .public)' available: \(self.isModelAvailable, privacy: .public)")
+        Log.ml.info("Compiled model '\(self.compiledModelName)' available: \(self.isModelAvailable)")
         if !isModelAvailable {
-            let bundlePath = Bundle.main.bundlePath
-            Log.ml.error("Model not found in bundle path: \(bundlePath, privacy: .public)")
+            Log.ml.error("Model not found. Bundle path: \(Bundle.main.bundlePath)")
         }
     }
 }
