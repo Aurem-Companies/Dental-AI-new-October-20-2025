@@ -36,33 +36,25 @@ class DetectionFactory {
     
     // MARK: - Service with Fallback
     static func makeWithFallback() -> DetectionService {
-        if FeatureFlags.useMLDetection {
-            let mlService = makeMLDetectionService()
-            if let mlService = mlService as? MLDetectionService, !mlService.isModelAvailable && FeatureFlags.enableFallback {
-                #if DEBUG
-                print("⚠️ ML model not available, falling back to CV service")
-                #endif
-                return makeCVDetectionService()
-            }
-            return mlService
-        } else if FeatureFlags.useONNXDetection {
+        // 1) Try ONNX first if enabled and model available
+        if FeatureFlags.useONNXDetection {
             #if canImport(ONNXRuntime) || canImport(OrtMobile)
             let onnxService = makeONNXDetectionService()
-            if let onnxService = onnxService as? ONNXDetectionService, !onnxService.isModelAvailable && FeatureFlags.enableFallback {
-                #if DEBUG
-                print("⚠️ ONNX model not available, falling back to CV service")
-                #endif
-                return makeCVDetectionService()
+            if let onnxService = onnxService as? ONNXDetectionService, onnxService.isModelAvailable {
+                return onnxService
             }
-            return onnxService
-            #else
-            if FeatureFlags.enableFallback {
-                return makeCVDetectionService()
-            }
-            return makeCVDetectionService()
             #endif
         }
         
+        // 2) Try ML if enabled and model available
+        if FeatureFlags.useMLDetection {
+            let mlService = makeMLDetectionService()
+            if let mlService = mlService as? MLDetectionService, mlService.isModelAvailable {
+                return mlService
+            }
+        }
+        
+        // 3) Fall back to CV
         return makeCVDetectionService()
     }
     

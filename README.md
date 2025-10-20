@@ -106,7 +106,7 @@ DentalAI provides educational image analysis to help you monitor visible changes
 - **Plaque**: Visual patterns related to bacterial buildup
 - **Tartar**: Visual patterns related to hardened plaque
 - **Dead Tooth**: Visual patterns related to non-vital teeth
-- **Root Canal**: Visual patterns related to treatment indicators
+- **Root Canal**: Visual patterns related to treatment areas
 - **Chipped Teeth**: Visual patterns related to structural damage
 - **Misaligned Teeth**: Visual patterns related to alignment issues
 - **Healthy**: Visual patterns indicating good oral health
@@ -145,6 +145,7 @@ DentalAI provides educational image analysis to help you monitor visible changes
 - **Encrypted Storage**: Secure data protection
 - **User Control**: Full data ownership and deletion rights
 - **Minimal Permissions**: Only camera access required
+- **How we handle data**: On-device inference by default; user-controlled deletion
 
 ## Development
 

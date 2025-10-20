@@ -71,11 +71,31 @@ struct FeatureFlags {
         }
     }
     
+    // MARK: - Bundled Model Detection
+    static var hasBundledONNX: Bool {
+        return ModelLocator.modelExists(name: "dental_model", ext: "onnx")
+    }
+    
+    static var hasBundledML: Bool {
+        // Check for any .mlmodel files (they get compiled to .mlmodelc)
+        return Bundle.main.url(forResource: "dental_model", withExtension: "mlmodel") != nil ||
+               Bundle.main.url(forResource: "dental_model", withExtension: "mlmodelc") != nil
+    }
+    
+    // MARK: - Current Configuration (with resource-based defaults)
+    static var current: (useMLDetection: Bool, useONNXDetection: Bool, enableFallback: Bool) {
+        return (
+            useMLDetection: UserDefaults.standard.object(forKey: "useMLDetection") != nil ? useMLDetection : hasBundledML,
+            useONNXDetection: UserDefaults.standard.object(forKey: "useONNXDetection") != nil ? useONNXDetection : hasBundledONNX,
+            enableFallback: true
+        )
+    }
+    
     // MARK: - Default Configuration
     static func configureDefaults() {
-        // Set default values if not already set
+        // Set default values based on resource availability if not already set
         if UserDefaults.standard.object(forKey: "useMLDetection") == nil {
-            useMLDetection = true
+            useMLDetection = hasBundledML
         }
         
         if UserDefaults.standard.object(forKey: "useCVDetection") == nil {
@@ -83,7 +103,7 @@ struct FeatureFlags {
         }
         
         if UserDefaults.standard.object(forKey: "useONNXDetection") == nil {
-            useONNXDetection = false
+            useONNXDetection = hasBundledONNX
         }
         
         if UserDefaults.standard.object(forKey: "enableFallback") == nil {

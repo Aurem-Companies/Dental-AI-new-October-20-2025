@@ -32,6 +32,10 @@ struct ImageAnalysisView: View {
             .navigationTitle("Analysis Results")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    ShareButton(result: result)
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         dismiss()
@@ -631,6 +635,61 @@ struct ConditionExplanationCard: View {
             return "Root canal treatment is needed for infected tooth pulp. The \(Int(confidence * 100))% shows detection confidence. This procedure saves the tooth from extraction."
         }
     }
+}
+
+// MARK: - Share Button
+struct ShareButton: View {
+    let result: DentalAnalysisResult
+    @State private var showingShareSheet = false
+    @State private var exportedImage: UIImage?
+    
+    var body: some View {
+        Button(action: {
+            exportAndShare()
+        }) {
+            Image(systemName: "square.and.arrow.up")
+                .font(.title3)
+        }
+        .sheet(isPresented: $showingShareSheet) {
+            if let image = exportedImage {
+                ShareSheet(items: [image])
+            }
+        }
+    }
+    
+    private func exportAndShare() {
+        // Convert detections to DetectionBox format
+        let detections = result.detectedConditions.compactMap { (condition, confidence) -> DetectionBox? in
+            // Create a simple bounding box for each detection
+            // In a real implementation, you'd get actual bounding boxes from the detection service
+            let rect = CGRect(x: 50, y: 50, width: 100, height: 100) // Placeholder
+            return DetectionBox(rect: rect, label: condition.displayName, confidence: Float(confidence))
+        }
+        
+        // Create a placeholder image (in real implementation, use the actual analyzed image)
+        let placeholderImage = UIImage(systemName: "photo") ?? UIImage()
+        
+        // Export the image with detections
+        exportedImage = ResultExporter.render(
+            image: placeholderImage,
+            detections: detections,
+            modelVersion: "v1.0",
+            date: result.timestamp
+        )
+        
+        showingShareSheet = true
+    }
+}
+
+// MARK: - Share Sheet
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Preview
