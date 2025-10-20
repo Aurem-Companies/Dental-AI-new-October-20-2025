@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import SwiftUI
+import OSLog
 
 // MARK: - User Feedback Service
 class UserFeedbackService: ObservableObject {
@@ -31,12 +32,14 @@ class UserFeedbackService: ObservableObject {
         }
         
         // Process feedback
-        try await processFeedback(feedback)
+        var mutableFeedback = feedback
+        try await processFeedback(&mutableFeedback)
         
         // Move to history
+        let processedFeedback = mutableFeedback
         await MainActor.run {
             pendingFeedback.removeAll { $0.id == feedback.id }
-            feedbackHistory.insert(feedback, at: 0)
+            feedbackHistory.insert(processedFeedback, at: 0)
             
             // Keep only last 100 feedback items
             if feedbackHistory.count > 100 {
@@ -51,24 +54,25 @@ class UserFeedbackService: ObservableObject {
     }
     
     // MARK: - Feedback Processing
-    private func processFeedback(_ feedback: UserFeedback) async throws {
+    private func processFeedback(_ feedback: inout UserFeedback) async throws {
         switch feedback.type {
         case .bugReport:
-            try await processBugReport(feedback)
+            try await processBugReport(&feedback)
         case .featureRequest:
-            try await processFeatureRequest(feedback)
+            try await processFeatureRequest(&feedback)
         case .rating:
-            try await processRating(feedback)
+            try await processRating(&feedback)
         case .general:
-            try await processGeneralFeedback(feedback)
+            try await processGeneralFeedback(&feedback)
         case .analysisAccuracy:
-            try await processAnalysisAccuracyFeedback(feedback)
+            try await processAnalysisAccuracyFeedback(&feedback)
         }
     }
     
-    private func processBugReport(_ feedback: UserFeedback) async throws {
+    private func processBugReport(_ feedback: inout UserFeedback) async throws {
         // Log bug report
-        logger.warning("Bug Report: \(feedback.message)")
+        let message = feedback.message
+        logger.warning("Bug Report: \(message)")
         
         // Add system information
         let systemInfo = getSystemInfo()
@@ -78,30 +82,34 @@ class UserFeedbackService: ObservableObject {
         // await sendToCrashReportingService(feedback)
     }
     
-    private func processFeatureRequest(_ feedback: UserFeedback) async throws {
+    private func processFeatureRequest(_ feedback: inout UserFeedback) async throws {
         // Log feature request
-        logger.info("Feature Request: \(feedback.message)")
+        let message = feedback.message
+        logger.info("Feature Request: \(message)")
         
         // Could send to product management
         // await sendToProductManagement(feedback)
     }
     
-    private func processRating(_ feedback: UserFeedback) async throws {
+    private func processRating(_ feedback: inout UserFeedback) async throws {
         // Log rating
-        logger.info("User Rating: \(feedback.rating ?? 0)")
+        let rating = feedback.rating ?? 0
+        logger.info("User Rating: \(rating)")
         
         // Could send to analytics service
         // await sendToAnalytics(feedback)
     }
     
-    private func processGeneralFeedback(_ feedback: UserFeedback) async throws {
+    private func processGeneralFeedback(_ feedback: inout UserFeedback) async throws {
         // Log general feedback
-        logger.info("General Feedback: \(feedback.message)")
+        let message = feedback.message
+        logger.info("General Feedback: \(message)")
     }
     
-    private func processAnalysisAccuracyFeedback(_ feedback: UserFeedback) async throws {
+    private func processAnalysisAccuracyFeedback(_ feedback: inout UserFeedback) async throws {
         // Log analysis accuracy feedback
-        logger.info("Analysis Accuracy Feedback: \(feedback.message)")
+        let message = feedback.message
+        logger.info("Analysis Accuracy Feedback: \(message)")
         
         // This could be used to improve ML models
         // await sendToMLImprovementService(feedback)
@@ -219,7 +227,12 @@ class UserFeedbackService: ObservableObject {
     }
     
     func getFeedbackByRating(_ rating: Int) -> [UserFeedback] {
-        return feedbackHistory.filter { $0.rating == rating }
+        return feedbackHistory.filter { 
+            if let feedbackRating = $0.rating {
+                return Int(feedbackRating) == rating
+            }
+            return false
+        }
     }
     
     // MARK: - Feedback Search
@@ -258,7 +271,7 @@ class UserFeedbackService: ObservableObject {
     }
     
     // MARK: - Feedback Response
-    func respondToFeedback(_ feedback: UserFeedback, response: String) async throws {
+    func respondToFeedback(_ feedback: inout UserFeedback, response: String) async throws {
         feedback.response = response
         feedback.responseDate = Date()
         
@@ -268,11 +281,12 @@ class UserFeedbackService: ObservableObject {
             saveFeedbackHistory()
         }
         
-        logger.info("Response added to feedback: \(feedback.id)")
+        let feedbackId = feedback.id
+        logger.info("Response added to feedback: \(feedbackId)")
     }
     
     // MARK: - Feedback Status
-    func updateFeedbackStatus(_ feedback: UserFeedback, status: FeedbackStatus) {
+    func updateFeedbackStatus(_ feedback: inout UserFeedback, status: FeedbackStatus) {
         feedback.status = status
         
         // Update in history
@@ -299,11 +313,11 @@ class UserFeedbackService: ObservableObject {
 
 // MARK: - Supporting Types
 struct UserFeedback: Codable, Identifiable {
-    let id = UUID()
+    let id: UUID
     let type: FeedbackType
     let category: FeedbackCategory
     let message: String
-    let rating: Int?
+    let rating: Double?
     let timestamp: Date
     var status: FeedbackStatus
     var response: String?
@@ -311,10 +325,11 @@ struct UserFeedback: Codable, Identifiable {
     var systemInfo: SystemInfo?
     
     init(type: FeedbackType, category: FeedbackCategory, message: String, rating: Int? = nil, status: FeedbackStatus = .pending) {
+        self.id = UUID()
         self.type = type
         self.category = category
         self.message = message
-        self.rating = rating
+        self.rating = rating.map { Double($0) }
         self.timestamp = Date()
         self.status = status
     }
@@ -411,7 +426,7 @@ struct SystemInfo: Codable {
     let timestamp: Date
 }
 
-struct FeedbackAnalytics {
+struct FeedbackAnalytics: Codable {
     let totalFeedback: Int
     let bugReports: Int
     let featureRequests: Int
@@ -422,7 +437,7 @@ struct FeedbackAnalytics {
     let feedbackTrend: FeedbackTrend
 }
 
-enum FeedbackTrend: String, CaseIterable {
+enum FeedbackTrend: String, CaseIterable, Codable {
     case increasing = "increasing"
     case stable = "stable"
     case decreasing = "decreasing"
@@ -449,6 +464,13 @@ struct FeedbackExport: Codable {
     let analytics: FeedbackAnalytics
     let exportDate: Date
     let version: String
+    
+    init(feedbackHistory: [UserFeedback], analytics: FeedbackAnalytics, exportDate: Date = Date(), version: String = "1.0") {
+        self.feedbackHistory = feedbackHistory
+        self.analytics = analytics
+        self.exportDate = exportDate
+        self.version = version
+    }
 }
 
 enum FeedbackError: Error, LocalizedError {

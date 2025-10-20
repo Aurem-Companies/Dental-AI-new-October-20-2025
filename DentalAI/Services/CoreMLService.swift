@@ -13,7 +13,7 @@ protocol CoreMLServiceProtocol {
 }
 
 // MARK: - CoreML Service Implementation
-class CoreMLService: CoreMLServiceProtocol {
+class CoreMLService: CoreMLServiceProtocol, @unchecked Sendable {
     
     // MARK: - Properties
     private var model: VNCoreMLModel?
@@ -88,7 +88,7 @@ class CoreMLService: CoreMLServiceProtocol {
     
     // MARK: - Model Information
     func getModelInfo() -> ModelInfo? {
-        guard let model = model else { return nil }
+        guard model != nil else { return nil }
         
         return ModelInfo(
             name: currentModelName ?? "Unknown",
@@ -117,7 +117,7 @@ class CoreMLService: CoreMLServiceProtocol {
     
     // MARK: - Model Validation
     func validateModel() -> ModelValidationResult {
-        guard let model = model else {
+        guard model != nil else {
             return ModelValidationResult(
                 isValid: false,
                 errors: ["Model not loaded"],
@@ -125,8 +125,8 @@ class CoreMLService: CoreMLServiceProtocol {
             )
         }
         
-        var errors: [String] = []
-        var warnings: [String] = []
+        let errors: [String] = []
+        let warnings: [String] = []
         
         // Check model input/output specifications
         // This would be implemented based on the actual model structure
@@ -277,7 +277,11 @@ enum CoreMLError: Error, LocalizedError {
 extension CoreMLService {
     func predictAsync(image: UIImage) async throws -> [String: Double] {
         return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self = self else {
+                    continuation.resume(throwing: CoreMLError.modelNotLoaded)
+                    return
+                }
                 do {
                     let predictions = try self.predict(image: image)
                     continuation.resume(returning: predictions)
@@ -290,7 +294,11 @@ extension CoreMLService {
     
     func predictBatchAsync(images: [UIImage]) async throws -> [[String: Double]] {
         return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self = self else {
+                    continuation.resume(throwing: CoreMLError.modelNotLoaded)
+                    return
+                }
                 do {
                     let results = try self.predictBatch(images: images)
                     continuation.resume(returning: results)
@@ -441,14 +449,8 @@ class CoreMLServiceValidator {
         
         return ValidationResult(
             isValid: errors.isEmpty,
-            errors: errors,
+            errors: errors.map { _ in ValidationError.validationFailed },
             warnings: warnings
         )
     }
-}
-
-struct ValidationResult {
-    let isValid: Bool
-    let errors: [String]
-    let warnings: [String]
 }

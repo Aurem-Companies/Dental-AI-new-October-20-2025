@@ -1,0 +1,158 @@
+--- /dev/null
++++ b/DentalAI/Services/ModelLocator.swift
+@@ -0,0 +1,35 @@
++import Foundation
++
++// MARK: - Model Locator Helper
++struct ModelLocator {
++    
++    /// Safely locate a bundled model file
++    /// - Parameters:
++    ///   - name: The name of the model file (without extension)
++    ///   - ext: The file extension (e.g., "mlmodel", "onnx", "pt")
++    /// - Returns: URL to the bundled model file, or nil if not found
++    static func bundledURL(name: String, ext: String) -> URL? {
++        guard let url = Bundle.main.url(forResource: name, withExtension: ext) else {
++            #if DEBUG
++            print("⚠️ Model not found in bundle: \(name).\(ext)")
++            #endif
++            return nil
++        }
++        
++        #if DEBUG
++        print("✅ Model found in bundle: \(name).\(ext)")
++        #endif
++        
++        return url
++    }
++    
++    /// Check if a model file exists in the bundle
++    /// - Parameters:
++    ///   - name: The name of the model file (without extension)
++    ///   - ext: The file extension
++    /// - Returns: true if the model exists in the bundle
++    static func modelExists(name: String, ext: String) -> Bool {
++        return bundledURL(name: name, ext: ext) != nil
++    }
++}
+
+--- a/DentalAI/Services/MLDetectionService.swift
++++ b/DentalAI/Services/MLDetectionService.swift
+@@ -10,6 +10,15 @@ class MLDetectionService: DetectionService, @unchecked Sendable {
+     private let modelName = "DentalDetectionModel"
+     private let confidenceThreshold: Float = 0.5
+     private let nmsThreshold: Float = 0.4
++    
++    // MARK: - Model Availability
++    var isModelAvailable: Bool {
++        return model != nil
++    }
++    
++    var modelStatus: String {
++        return isModelAvailable ? "Available" : "Not Available"
++    }
+@@ -30,15 +39,15 @@ class MLDetectionService: DetectionService, @unchecked Sendable {
+     // MARK: - Model Loading
+     private func loadModel() {
+-        // Try to load ONNX model first, fallback to CoreML
+-        if Bundle.main.url(forResource: modelName, withExtension: "onnx") != nil {
+-            print("Found ONNX model: \(modelName).onnx")
+-            // For now, we'll use the ONNXDetectionService for ONNX models
+-            // This service will handle ONNX models
+-            return
+-        }
+-        
+-        guard let modelURL = Bundle.main.url(forResource: modelName, withExtension: "mlpackage") else {
+-            print("Model file not found: \(modelName).mlpackage or \(modelName).onnx")
++        // Try to load CoreML model first
++        guard let modelURL = ModelLocator.bundledURL(name: modelName, ext: "mlmodel") else {
++            #if DEBUG
++            print("⚠️ CoreML model not found: \(modelName).mlmodel")
++            #endif
+             return
+         }
+         
+         do {
+-            let mlModel = try MLModel(contentsOf: modelURL)
+-            model = try VNCoreMLModel(for: mlModel)
+-            print("Successfully loaded CoreML model: \(modelName)")
++            let coreMLModel = try MLModel(contentsOf: modelURL)
++            model = try VNCoreMLModel(for: coreMLModel)
++            #if DEBUG
++            print("✅ CoreML model loaded successfully: \(modelName).mlmodel")
++            #endif
+         } catch {
+-            print("Failed to load CoreML model: \(error)")
++            #if DEBUG
++            print("❌ Failed to load CoreML model: \(error)")
++            #endif
++            model = nil
+         }
+     }
+
+--- a/DentalAI/Services/ONNXDetectionService.swift
++++ b/DentalAI/Services/ONNXDetectionService.swift
+@@ -11,6 +11,15 @@ class ONNXDetectionService: DetectionService, @unchecked Sendable {
+     private let classLabels = [
+         "cavity", "gingivitis", "discoloration", "plaque", "tartar",
+         "dead_tooth", "chipped", "misaligned", "healthy", "gum_inflammation"
+     ]
++    
++    // MARK: - Model Availability
++    var isModelAvailable: Bool {
++        return ModelLocator.modelExists(name: modelName, ext: "onnx")
++    }
++    
++    var modelStatus: String {
++        return isModelAvailable ? "Available" : "Not Available"
++    }
+@@ -18,7 +27,15 @@ class ONNXDetectionService: DetectionService, @unchecked Sendable {
+     // MARK: - Initialization
+     init() {
+-        print("ONNX Detection Service initialized")
++        if isModelAvailable {
++            #if DEBUG
++            print("✅ ONNX Detection Service initialized with model: \(modelName).onnx")
++            #endif
++        } else {
++            #if DEBUG
++            print("⚠️ ONNX Detection Service initialized without model: \(modelName).onnx not found")
++            #endif
++        }
+     }
+
+--- a/DentalAI/Services/DetectionFactory.swift
++++ b/DentalAI/Services/DetectionFactory.swift
+@@ -37,15 +37,25 @@ class DetectionFactory {
+     // MARK: - Service with Fallback
+     static func makeWithFallback() -> DetectionService {
+         if FeatureFlags.useMLDetection {
+             let mlService = makeMLDetectionService()
+             if let mlService = mlService as? MLDetectionService, !mlService.isModelAvailable && FeatureFlags.enableFallback {
++                #if DEBUG
++                print("⚠️ ML model not available, falling back to CV service")
++                #endif
+                 return makeCVDetectionService()
+             }
+             return mlService
+         } else if FeatureFlags.useONNXDetection {
+             #if canImport(ONNXRuntime) || canImport(OrtMobile)
+-            return makeONNXDetectionService()
++            let onnxService = makeONNXDetectionService()
++            if let onnxService = onnxService as? ONNXDetectionService, !onnxService.isModelAvailable && FeatureFlags.enableFallback {
++                #if DEBUG
++                print("⚠️ ONNX model not available, falling back to CV service")
++                #endif
++                return makeCVDetectionService()
++            }
++            return onnxService
+             #else
+             if FeatureFlags.enableFallback {
+                 return makeCVDetectionService()
+             }
+             return makeCVDetectionService()
+             #endif
+         }
+         
+         return makeCVDetectionService()
+     }

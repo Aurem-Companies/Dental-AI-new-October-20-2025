@@ -6,16 +6,19 @@ class DetectionFactory {
     
     // MARK: - Factory Methods
     static func make() -> DetectionService {
-        return make(useMLDetection: FeatureFlags.useMLDetection)
+        return makeWithFallback()
     }
     
-    static func make(useMLDetection: Bool) -> DetectionService {
-        if useMLDetection {
+    static func makeWithFeatureFlags() -> DetectionService {
+        if FeatureFlags.useMLDetection {
             return makeMLDetectionService()
+        } else if FeatureFlags.useONNXDetection {
+            return makeONNXDetectionService()
         } else {
             return makeCVDetectionService()
         }
     }
+    
     
     // MARK: - Service Creation
     private static func makeMLDetectionService() -> DetectionService {
@@ -33,14 +36,34 @@ class DetectionFactory {
     
     // MARK: - Service with Fallback
     static func makeWithFallback() -> DetectionService {
-        let primaryService = makeMLDetectionService()
-        
-        // If primary service fails, return fallback service
-        if let mlService = primaryService as? MLDetectionService, !mlService.isModelAvailable {
+        if FeatureFlags.useMLDetection {
+            let mlService = makeMLDetectionService()
+            if let mlService = mlService as? MLDetectionService, !mlService.isModelAvailable && FeatureFlags.enableFallback {
+                #if DEBUG
+                print("⚠️ ML model not available, falling back to CV service")
+                #endif
+                return makeCVDetectionService()
+            }
+            return mlService
+        } else if FeatureFlags.useONNXDetection {
+            #if canImport(ONNXRuntime) || canImport(OrtMobile)
+            let onnxService = makeONNXDetectionService()
+            if let onnxService = onnxService as? ONNXDetectionService, !onnxService.isModelAvailable && FeatureFlags.enableFallback {
+                #if DEBUG
+                print("⚠️ ONNX model not available, falling back to CV service")
+                #endif
+                return makeCVDetectionService()
+            }
+            return onnxService
+            #else
+            if FeatureFlags.enableFallback {
+                return makeCVDetectionService()
+            }
             return makeCVDetectionService()
+            #endif
         }
         
-        return primaryService
+        return makeCVDetectionService()
     }
     
     // MARK: - Service Validation
@@ -50,6 +73,10 @@ class DetectionFactory {
             return (service as! MLDetectionService).isModelAvailable
         case is CVDentitionService:
             return true // CV service is always available
+        #if canImport(ONNXRuntime) || canImport(OrtMobile)
+        case is ONNXDetectionService:
+            return true // ONNX service is always available
+        #endif
         default:
             return false
         }
@@ -63,6 +90,10 @@ class DetectionFactory {
             return "ML Detection Service - \(mlService.modelStatus)"
         case is CVDentitionService:
             return "CV Detection Service - Available"
+        #if canImport(ONNXRuntime) || canImport(OrtMobile)
+        case is ONNXDetectionService:
+            return "ONNX Detection Service - Available"
+        #endif
         default:
             return "Unknown Service"
         }
@@ -71,10 +102,16 @@ class DetectionFactory {
     // MARK: - Service Comparison
     static func compareServices() -> String {
         let mlService = MLDetectionService()
-        let cvService = CVDentitionService()
+        #if canImport(ONNXRuntime) || canImport(OrtMobile)
+        let onnxService = ONNXDetectionService()
+        #endif
+        let _ = CVDentitionService()
         
         var comparison = "Service Comparison:\n"
         comparison += "• ML Service: \(mlService.isModelAvailable ? "Available" : "Not Available")\n"
+        #if canImport(ONNXRuntime) || canImport(OrtMobile)
+        comparison += "• ONNX Service: Available\n"
+        #endif
         comparison += "• CV Service: Available\n"
         comparison += "• Current Selection: \(FeatureFlags.useMLDetection ? "ML" : "CV")\n"
         comparison += "• Fallback Enabled: \(FeatureFlags.enableFallback)"
@@ -103,6 +140,12 @@ extension DetectionFactory {
         // Test ML Service
         let mlService = MLDetectionService()
         results["ML"] = testDetection(service: mlService, image: image)
+        
+        // Test ONNX Service
+        #if canImport(ONNXRuntime) || canImport(OrtMobile)
+        let onnxService = ONNXDetectionService()
+        results["ONNX"] = testDetection(service: onnxService, image: image)
+        #endif
         
         // Test CV Service
         let cvService = CVDentitionService()
@@ -134,10 +177,15 @@ extension DetectionFactory {
     // MARK: - Configure Service
     static func configureService(_ service: DetectionService) {
         // Apply feature flag settings to service
-        if let mlService = service as? MLDetectionService {
+        if service is MLDetectionService {
             // ML-specific configuration could go here
             print("Configuring ML Detection Service")
-        } else if let cvService = service as? CVDentitionService {
+        #if canImport(ONNXRuntime) || canImport(OrtMobile)
+        } else if service is ONNXDetectionService {
+            // ONNX-specific configuration could go here
+            print("Configuring ONNX Detection Service")
+        #endif
+        } else if service is CVDentitionService {
             // CV-specific configuration could go here
             print("Configuring CV Detection Service")
         }
@@ -153,6 +201,15 @@ extension DetectionFactory {
                 "Real-time inference",
                 "Confidence scoring"
             ]
+        #if canImport(ONNXRuntime) || canImport(OrtMobile)
+        case is ONNXDetectionService:
+            return [
+                "ONNX model inference",
+                "Cross-platform compatibility",
+                "Fast processing",
+                "Confidence scoring"
+            ]
+        #endif
         case is CVDentitionService:
             return [
                 "Computer vision detection",
@@ -164,4 +221,18 @@ extension DetectionFactory {
             return []
         }
     }
+}
+
+// MARK: - Model Loading Helper
+enum ModelLoadError: Error {
+    case modelNotFound(String)
+    case invalidModel
+    case loadingFailed(String)
+}
+
+func modelURL(named name: String, ext: String) throws -> URL {
+    guard let modelURL = Bundle.main.url(forResource: name, withExtension: ext) else {
+        throw ModelLoadError.modelNotFound("\(name).\(ext)")
+    }
+    return modelURL
 }

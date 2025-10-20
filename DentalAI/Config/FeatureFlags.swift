@@ -13,15 +13,16 @@ struct FeatureFlags {
         }
     }
     
-    // MARK: - CV Detection
-    static var useCVDetection: Bool {
+    // MARK: - ONNX Detection
+    static var useONNXDetection: Bool {
         get {
-            return UserDefaults.standard.bool(forKey: "useCVDetection")
+            return UserDefaults.standard.bool(forKey: "useONNXDetection")
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: "useCVDetection")
+            UserDefaults.standard.set(newValue, forKey: "useONNXDetection")
         }
     }
+    
     
     // MARK: - Fallback Behavior
     static var enableFallback: Bool {
@@ -81,6 +82,10 @@ struct FeatureFlags {
             useCVDetection = true
         }
         
+        if UserDefaults.standard.object(forKey: "useONNXDetection") == nil {
+            useONNXDetection = false
+        }
+        
         if UserDefaults.standard.object(forKey: "enableFallback") == nil {
             enableFallback = true
         }
@@ -94,6 +99,7 @@ struct FeatureFlags {
     static func resetToDefaults() {
         useMLDetection = true
         useCVDetection = true
+        useONNXDetection = false
         enableFallback = true
         debugMode = false
         highPerformanceMode = false
@@ -105,6 +111,7 @@ struct FeatureFlags {
         var status = "Feature Flags Status:\n"
         status += "• ML Detection: \(useMLDetection ? "Enabled" : "Disabled")\n"
         status += "• CV Detection: \(useCVDetection ? "Enabled" : "Disabled")\n"
+        status += "• ONNX Detection: \(useONNXDetection ? "Enabled" : "Disabled")\n"
         status += "• Fallback: \(enableFallback ? "Enabled" : "Disabled")\n"
         status += "• Debug Mode: \(debugMode ? "Enabled" : "Disabled")\n"
         status += "• High Performance: \(highPerformanceMode ? "Enabled" : "Disabled")\n"
@@ -140,6 +147,7 @@ extension FeatureFlags {
             // Development defaults
             useMLDetection = true
             useCVDetection = true
+            useONNXDetection = false
             enableFallback = true
             debugMode = true
             highPerformanceMode = false
@@ -148,6 +156,7 @@ extension FeatureFlags {
             // Production defaults
             useMLDetection = true
             useCVDetection = true
+            useONNXDetection = false
             enableFallback = true
             debugMode = false
             highPerformanceMode = true

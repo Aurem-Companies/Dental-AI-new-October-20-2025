@@ -12,9 +12,32 @@ struct CameraView: UIViewControllerRepresentable {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
         picker.sourceType = .camera
-        picker.cameraDevice = .front
-        picker.cameraFlashMode = .off
+        
+        // Check if camera is available
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            print("❌ Camera not available")
+            return picker
+        }
+        
+        // Configure camera with fallback options
+        if UIImagePickerController.isCameraDeviceAvailable(.rear) {
+            picker.cameraDevice = .rear
+        } else if UIImagePickerController.isCameraDeviceAvailable(.front) {
+            picker.cameraDevice = .front
+        }
+        
+        // Configure flash mode with fallback
+        if UIImagePickerController.isFlashAvailable(for: picker.cameraDevice) {
+            picker.cameraFlashMode = .auto
+        } else {
+            picker.cameraFlashMode = .off
+        }
+        
         picker.allowsEditing = false
+        picker.cameraCaptureMode = .photo
+        picker.showsCameraControls = true
+        
+        print("✅ Camera configured - Device: \(picker.cameraDevice == .rear ? "rear" : "front")")
         return picker
     }
     
@@ -22,6 +45,10 @@ struct CameraView: UIViewControllerRepresentable {
     
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
+    }
+    
+    var body: some View {
+        EmptyView()
     }
     
     class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
@@ -33,88 +60,48 @@ struct CameraView: UIViewControllerRepresentable {
         
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
             if let image = info[.originalImage] as? UIImage {
+                print("✅ Image captured successfully - Size: \(image.size)")
                 parent.processImage(image)
+            } else {
+                print("❌ Failed to capture image")
             }
             parent.dismiss()
         }
         
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            print("📷 Camera cancelled by user")
             parent.dismiss()
         }
     }
     
     private func processImage(_ image: UIImage) {
+        print("🔄 Photo captured - showing analysis screen immediately")
+        print("🔄 Image size: \(image.size)")
+        
+        // Show analysis screen immediately
+        DispatchQueue.main.async {
+            self.showingImageAnalysis = true
+            print("🔄 Analysis screen shown immediately")
+        }
+        
+        // Start analysis in background
         Task {
             do {
                 let result = try await detectionViewModel.analyzeImage(image)
                 await MainActor.run {
-                    showingImageAnalysis = true
+                    print("✅ Analysis completed successfully")
+                    print("📊 Result: \(result.healthScore) health score")
+                    print("🔍 Conditions detected: \(result.detectedConditions.count)")
                 }
             } catch {
                 await MainActor.run {
-                    // Handle error
-                    print("Analysis failed: \(error)")
+                    print("❌ Analysis failed: \(error)")
                 }
             }
         }
     }
 }
 
-// MARK: - Photo Library View
-struct PhotoLibraryView: UIViewControllerRepresentable {
-    @ObservedObject var detectionViewModel: DetectionViewModel
-    @Binding var showingImageAnalysis: Bool
-    @Environment(\.dismiss) private var dismiss
-    
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.sourceType = .photoLibrary
-        picker.allowsEditing = false
-        return picker
-    }
-    
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: PhotoLibraryView
-        
-        init(_ parent: PhotoLibraryView) {
-            self.parent = parent
-        }
-        
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.processImage(image)
-            }
-            parent.dismiss()
-        }
-        
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
-        }
-    }
-    
-    private func processImage(_ image: UIImage) {
-        Task {
-            do {
-                let result = try await detectionViewModel.analyzeImage(image)
-                await MainActor.run {
-                    showingImageAnalysis = true
-                }
-            } catch {
-                await MainActor.run {
-                    // Handle error
-                    print("Analysis failed: \(error)")
-                }
-            }
-        }
-    }
-}
 
 // MARK: - Image Capture View
 struct ImageCaptureView: View {
@@ -248,7 +235,7 @@ struct ImageCaptureView: View {
         
         Task {
             do {
-                let result = try await detectionViewModel.analyzeImage(image)
+                let _ = try await detectionViewModel.analyzeImage(image)
                 await MainActor.run {
                     isAnalyzing = false
                     showingImageAnalysis = true
@@ -385,7 +372,7 @@ struct RealTimeValidationOverlay: View {
                 
                 Spacer()
                 
-                if validation.isReady {
+                if validation.isReadyForAnalysis {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
                 } else {
@@ -394,7 +381,7 @@ struct RealTimeValidationOverlay: View {
                 }
             }
             
-            if validation.isReady {
+            if validation.isReadyForAnalysis {
                 Text("Ready for analysis")
                     .font(.subheadline)
                     .foregroundColor(.green)

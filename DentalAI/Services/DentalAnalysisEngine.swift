@@ -16,13 +16,17 @@ class DentalAnalysisEngine {
     
     // MARK: - Main Analysis Pipeline
     func analyzeDentalImage(_ image: UIImage, userProfile: UserProfile) async throws -> DentalAnalysisResult {
+        print("🔬 DentalAnalysisEngine: Starting analysis pipeline...")
         let startTime = Date()
         
         // Step 1: Validate image
+        print("🔬 DentalAnalysisEngine: Step 1 - Validating image...")
         let validation = validationService.validateImage(image)
         guard validation.isValid else {
+            print("🔬 DentalAnalysisEngine: Image validation failed")
             throw AnalysisError.invalidImage
         }
+        print("🔬 DentalAnalysisEngine: Image validation passed")
         
         // Step 2: Preprocess image
         let preprocessStart = Date()
@@ -32,9 +36,11 @@ class DentalAnalysisEngine {
         let preprocessTime = Date().timeIntervalSince(preprocessStart)
         
         // Step 3: Detect dental conditions
+        print("🔬 DentalAnalysisEngine: Step 3 - Detecting dental conditions...")
         let detectionStart = Date()
         let detectedConditions = try await detectDentalConditions(preprocessedImage)
         let detectionTime = Date().timeIntervalSince(detectionStart)
+        print("🔬 DentalAnalysisEngine: Detection completed - found \(detectedConditions.count) conditions")
         
         // Step 4: Post-process results
         let postprocessStart = Date()
@@ -85,6 +91,8 @@ class DentalAnalysisEngine {
             )
         )
         
+        print("🔬 DentalAnalysisEngine: Analysis pipeline completed successfully")
+        print("🔬 DentalAnalysisEngine: Final result - Health Score: \(result.healthScore), Conditions: \(result.detectedConditions.count)")
         return result
     }
     
@@ -377,52 +385,4 @@ struct RealTimeAnalysisResult {
     let quality: ImageQuality
     let suggestions: [String]
     let confidence: Float
-}
-
-// MARK: - Feature Flags
-struct FeatureFlags {
-    static var useMLDetection: Bool {
-        get { UserDefaults.standard.bool(forKey: "useMLDetection") }
-        set { UserDefaults.standard.set(newValue, forKey: "useMLDetection") }
-    }
-    
-    static var useCVDetection: Bool {
-        get { UserDefaults.standard.bool(forKey: "useCVDetection") }
-        set { UserDefaults.standard.set(newValue, forKey: "useCVDetection") }
-    }
-    
-    static var enableFallback: Bool {
-        get { UserDefaults.standard.bool(forKey: "enableFallback") }
-        set { UserDefaults.standard.set(newValue, forKey: "enableFallback") }
-    }
-    
-    static var debugMode: Bool {
-        get { UserDefaults.standard.bool(forKey: "debugMode") }
-        set { UserDefaults.standard.set(newValue, forKey: "debugMode") }
-    }
-    
-    static var highPerformanceMode: Bool {
-        get { UserDefaults.standard.bool(forKey: "highPerformanceMode") }
-        set { UserDefaults.standard.set(newValue, forKey: "highPerformanceMode") }
-    }
-    
-    static var modelConfidenceThreshold: Float {
-        get { UserDefaults.standard.float(forKey: "modelConfidenceThreshold") }
-        set { UserDefaults.standard.set(newValue, forKey: "modelConfidenceThreshold") }
-    }
-    
-    static func configureDefaults() {
-        if UserDefaults.standard.object(forKey: "useMLDetection") == nil {
-            useMLDetection = true
-        }
-        if UserDefaults.standard.object(forKey: "useCVDetection") == nil {
-            useCVDetection = true
-        }
-        if UserDefaults.standard.object(forKey: "enableFallback") == nil {
-            enableFallback = true
-        }
-        if UserDefaults.standard.object(forKey: "modelConfidenceThreshold") == nil {
-            modelConfidenceThreshold = 0.5
-        }
-    }
 }

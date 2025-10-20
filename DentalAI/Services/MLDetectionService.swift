@@ -5,13 +5,22 @@ import Vision
 import CoreGraphics
 
 // MARK: - ML Detection Service
-class MLDetectionService: DetectionService {
+class MLDetectionService: DetectionService, @unchecked Sendable {
     
     // MARK: - Properties
     private var model: VNCoreMLModel?
     private let modelName = "DentalDetectionModel"
     private let confidenceThreshold: Float = 0.5
     private let nmsThreshold: Float = 0.4
+    
+    // MARK: - Model Availability
+    var isModelAvailable: Bool {
+        return model != nil
+    }
+    
+    var modelStatus: String {
+        return isModelAvailable ? "Available" : "Not Available"
+    }
     
     // MARK: - Initialization
     init() {
@@ -20,17 +29,25 @@ class MLDetectionService: DetectionService {
     
     // MARK: - Model Loading
     private func loadModel() {
-        guard let modelURL = Bundle.main.url(forResource: modelName, withExtension: "mlpackage") else {
-            print("Model file not found: \(modelName).mlpackage")
+        // Try to load CoreML model first
+        guard let modelURL = ModelLocator.bundledURL(name: modelName, ext: "mlmodel") else {
+            #if DEBUG
+            print("⚠️ CoreML model not found: \(modelName).mlmodel")
+            #endif
             return
         }
         
         do {
-            let mlModel = try MLModel(contentsOf: modelURL)
-            model = try VNCoreMLModel(for: mlModel)
-            print("Successfully loaded model: \(modelName)")
+            let coreMLModel = try MLModel(contentsOf: modelURL)
+            model = try VNCoreMLModel(for: coreMLModel)
+            #if DEBUG
+            print("✅ CoreML model loaded successfully: \(modelName).mlmodel")
+            #endif
         } catch {
-            print("Failed to load model: \(error)")
+            #if DEBUG
+            print("❌ Failed to load CoreML model: \(error)")
+            #endif
+            model = nil
         }
     }
     
@@ -40,7 +57,7 @@ class MLDetectionService: DetectionService {
             throw ModelError.modelNotLoaded
         }
         
-        let request = VNCoreMLRequest(model: model) { [weak self] request, error in
+        let request = VNCoreMLRequest(model: model) { request, error in
             if let error = error {
                 print("Detection request failed: \(error)")
             }
@@ -59,7 +76,7 @@ class MLDetectionService: DetectionService {
             
             return processObservations(observations)
         } catch {
-            throw ModelError.inferenceFailed(error)
+            throw ModelError.inferenceFailed(error.localizedDescription)
         }
     }
     
@@ -133,7 +150,7 @@ class MLDetectionService: DetectionService {
     }
     
     var modelStatus: String {
-        if let model = model {
+        if model != nil {
             return "Model loaded: \(modelName)"
         } else {
             return "Model not available: \(modelName)"
@@ -141,46 +158,16 @@ class MLDetectionService: DetectionService {
     }
 }
 
-// MARK: - Detection Protocol
-protocol DetectionService {
-    func detect(in image: CGImage) throws -> [Detection]
-    var isModelAvailable: Bool { get }
-    var modelStatus: String { get }
-}
-
-// MARK: - Detection Model
-struct Detection {
-    let label: String
-    let confidence: Float
-    let boundingBox: CGRect
-}
-
-// MARK: - Model Error
-enum ModelError: Error, LocalizedError {
-    case modelNotLoaded
-    case inferenceFailed(Error)
-    case preprocessingFailed
-    case postprocessingFailed
-    
-    var errorDescription: String? {
-        switch self {
-        case .modelNotLoaded:
-            return "ML model is not loaded"
-        case .inferenceFailed(let error):
-            return "Inference failed: \(error.localizedDescription)"
-        case .preprocessingFailed:
-            return "Image preprocessing failed"
-        case .postprocessingFailed:
-            return "Result postprocessing failed"
-        }
-    }
-}
 
 // MARK: - Async Detection Extension
 extension MLDetectionService {
     func detectAsync(in image: CGImage) async throws -> [Detection] {
         return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self = self else {
+                    continuation.resume(throwing: ModelError.modelNotLoaded)
+                    return
+                }
                 do {
                     let detections = try self.detect(in: image)
                     continuation.resume(returning: detections)
@@ -250,7 +237,7 @@ struct ModelConfiguration {
 // MARK: - Model Validation
 extension MLDetectionService {
     func validateModel() -> ModelValidationResult {
-        guard let model = model else {
+        guard model != nil else {
             return ModelValidationResult(
                 isValid: false,
                 errors: ["Model not loaded"],
@@ -258,8 +245,8 @@ extension MLDetectionService {
             )
         }
         
-        var errors: [String] = []
-        var warnings: [String] = []
+        let errors: [String] = []
+        let warnings: [String] = []
         
         // Check model input/output specifications
         // This would be implemented based on the actual model structure
@@ -272,34 +259,10 @@ extension MLDetectionService {
     }
 }
 
-// MARK: - Model Validation Result
-struct ModelValidationResult {
-    let isValid: Bool
-    let errors: [String]
-    let warnings: [String]
-}
 
-// MARK: - Model Metrics
-struct ModelMetrics {
-    let accuracy: Float
-    let precision: Float
-    let recall: Float
-    let f1Score: Float
-    let inferenceTime: TimeInterval
-    let memoryUsage: Int64
-    
-    static let defaultMetrics = ModelMetrics(
-        accuracy: 0.85,
-        precision: 0.82,
-        recall: 0.88,
-        f1Score: 0.85,
-        inferenceTime: 0.5,
-        memoryUsage: 50 * 1024 * 1024 // 50MB
-    )
-}
 
 // MARK: - Model Update Handler
-protocol ModelUpdateHandler {
+protocol ModelUpdateHandler: AnyObject {
     func modelDidUpdate(_ model: VNCoreMLModel)
     func modelUpdateFailed(_ error: Error)
 }
@@ -347,7 +310,7 @@ class ModelManager: ObservableObject {
     }
     
     func reloadModel() {
-        guard let currentModel = currentModel else { return }
+        guard currentModel != nil else { return }
         // Implementation would reload the current model
     }
 }

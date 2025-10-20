@@ -9,6 +9,7 @@ class DetectionViewModel: ObservableObject {
     // MARK: - Published Properties
     @Published var isAnalyzing = false
     @Published var lastAnalysisResult: DentalAnalysisResult?
+    @Published var analysisResult: DentalAnalysisResult?
     @Published var analysisHistory: [DentalAnalysisResult] = []
     @Published var errorMessage: String?
     @Published var healthTrend: HealthTrend = .stable
@@ -26,6 +27,7 @@ class DetectionViewModel: ObservableObject {
     
     // MARK: - Analysis Methods
     func analyzeImage(_ image: UIImage) async throws -> DentalAnalysisResult {
+        print("🔬 DetectionViewModel: Starting image analysis...")
         await MainActor.run {
             isAnalyzing = true
             errorMessage = nil
@@ -34,23 +36,36 @@ class DetectionViewModel: ObservableObject {
         defer {
             Task { @MainActor in
                 isAnalyzing = false
+                print("🔬 DetectionViewModel: Analysis completed, isAnalyzing = false")
             }
         }
         
         do {
             let userProfile = dataManager.userProfile
+            print("🔬 DetectionViewModel: Calling dentalAnalysisEngine.analyzeDentalImage...")
             let result = try await dentalAnalysisEngine.analyzeDentalImage(image, userProfile: userProfile)
             
             await MainActor.run {
+                print("🔬 DetectionViewModel: Analysis successful, storing results...")
+                print("🔬 DetectionViewModel: Health Score: \(result.healthScore)")
+                print("🔬 DetectionViewModel: Conditions: \(result.detectedConditions.count)")
+                print("🔬 DetectionViewModel: Generated \(result.recommendations.count) personalized recommendations")
+                for (index, recommendation) in result.recommendations.enumerated() {
+                    print("   \(index + 1). \(recommendation.category.displayName) - \(recommendation.priority.rawValue)")
+                    print("      Actions: \(recommendation.actionItems.joined(separator: ", "))")
+                }
                 lastAnalysisResult = result
+                analysisResult = result
                 addAnalysisResult(result)
                 updateHealthTrend()
+                print("🔬 DetectionViewModel: Results stored successfully")
             }
             
             return result
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                print("🔬 DetectionViewModel: Analysis failed with error: \(error)")
+                print("🔬 DetectionViewModel: Analysis failed - no results to show")
             }
             throw error
         }
@@ -85,6 +100,14 @@ class DetectionViewModel: ObservableObject {
         updateHealthTrend()
     }
     
+    func clearAllAnalysisHistory() {
+        // Permanently clear all analysis history from persistent storage
+        analysisHistory.removeAll()
+        dataManager.clearAllAnalysisHistory()
+        updateHealthTrend()
+        print("🗑️ All analysis history permanently cleared")
+    }
+    
     // MARK: - Health Trend Analysis
     private func updateHealthTrend() {
         guard analysisHistory.count >= 2 else {
@@ -98,7 +121,7 @@ class DetectionViewModel: ObservableObject {
         let recentAvg = recentResults.map { $0.healthScore }.reduce(0, +) / recentResults.count
         let olderAvg = olderResults.map { $0.healthScore }.reduce(0, +) / olderResults.count
         
-        let improvementRate = (recentAvg - olderAvg) / Float(olderAvg)
+        let improvementRate = Float(recentAvg - olderAvg) / Float(olderAvg)
         
         if improvementRate > 0.1 {
             healthTrend = .improving
@@ -146,9 +169,11 @@ class DetectionViewModel: ObservableObject {
                         )
                     }
                     
-                    stats[condition]?.count += 1
-                    stats[condition]?.averageConfidence = (stats[condition]?.averageConfidence ?? 0.0 + confidence) / 2.0
-                    stats[condition]?.lastDetected = result.timestamp
+                    var currentStats = stats[condition]!
+                    currentStats.count += 1
+                    currentStats.averageConfidence = (currentStats.averageConfidence + confidence) / 2.0
+                    currentStats.lastDetected = result.timestamp
+                    stats[condition] = currentStats
                 }
             }
         }
@@ -233,10 +258,13 @@ class DetectionViewModel: ObservableObject {
     func getPerformanceMetrics() -> PerformanceMetrics {
         guard !analysisHistory.isEmpty else {
             return PerformanceMetrics(
-                averageAnalysisTime: 0.0,
-                totalAnalyses: 0,
-                successRate: 0.0,
-                averageConfidence: 0.0
+                averageOperationTime: 0.0,
+                totalOperations: 0,
+                memoryUsage: 0,
+                cpuUsage: 0.0,
+                operationCounts: [:],
+                memorySnapshots: [:],
+                cpuSnapshots: [:]
             )
         }
         
@@ -250,15 +278,24 @@ class DetectionViewModel: ObservableObject {
         let averageConfidence = totalConfidence / Double(analysisHistory.count)
         
         return PerformanceMetrics(
-            averageAnalysisTime: averageTime,
-            totalAnalyses: analysisHistory.count,
-            successRate: successRate,
-            averageConfidence: averageConfidence
+            averageOperationTime: averageTime,
+            totalOperations: analysisHistory.count,
+            memoryUsage: Int64(successRate * 1000000), // Convert success rate to memory-like metric
+            cpuUsage: averageConfidence,
+            operationCounts: ["analysis": analysisHistory.count],
+            memorySnapshots: ["current": Int64(successRate * 1000000)],
+            cpuSnapshots: ["current": averageConfidence]
         )
     }
     
     // MARK: - Error Handling
     func clearError() {
+        errorMessage = nil
+    }
+    
+    func clearResults() {
+        analysisResult = nil
+        lastAnalysisResult = nil
         errorMessage = nil
     }
     
@@ -325,12 +362,6 @@ struct HealthScoreDataPoint {
     let confidence: Double
 }
 
-struct PerformanceMetrics {
-    let averageAnalysisTime: Double
-    let totalAnalyses: Int
-    let successRate: Double
-    let averageConfidence: Double
-}
 
 // MARK: - Extensions
 extension DetectionViewModel {

@@ -237,16 +237,32 @@ struct ImageAnalysisView: View {
     private var detailsTab: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // Analysis Metadata
+                // Condition Explanations
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("What These Results Mean")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    ForEach(Array(result.detectedConditions.keys.sorted { $0.displayName < $1.displayName }), id: \.self) { condition in
+                        if let confidence = result.detectedConditions[condition] {
+                            ConditionExplanationCard(condition: condition, confidence: confidence)
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                
+                // Analysis Summary
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Analysis Details")
+                    Text("Analysis Summary")
                         .font(.headline)
                         .fontWeight(.semibold)
                     
                     VStack(spacing: 8) {
-                        DetailRow(title: "Processing Method", value: result.metadata.processingMethod)
-                        DetailRow(title: "Model Version", value: result.metadata.modelVersion)
-                        DetailRow(title: "Device Info", value: result.metadata.deviceInfo)
+                        DetailRow(title: "Analysis Date", value: DateFormatter.shortDate.string(from: result.timestamp))
+                        DetailRow(title: "Overall Confidence", value: "\(Int(result.confidence * 100))%")
+                        DetailRow(title: "Analysis Time", value: String(format: "%.1f seconds", result.analysisDuration))
                         DetailRow(title: "Image Size", value: "\(Int(result.metadata.imageSize.width))x\(Int(result.metadata.imageSize.height))")
                         DetailRow(title: "Preprocessing Time", value: "\(String(format: "%.2f", result.metadata.preprocessingTime))s")
                         DetailRow(title: "Inference Time", value: "\(String(format: "%.2f", result.metadata.inferenceTime))s")
@@ -544,6 +560,76 @@ struct ConditionDetailRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Condition Explanation Card
+struct ConditionExplanationCard: View {
+    let condition: DentalCondition
+    let confidence: Double
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(condition.emoji)
+                    .font(.title2)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(condition.displayName)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    Text("\(Int(confidence * 100))% detected")
+                        .font(.subheadline)
+                        .foregroundColor(confidenceColor)
+                        .fontWeight(.medium)
+                }
+                
+                Spacer()
+            }
+            
+            Text(conditionExplanation)
+                .font(.body)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    private var confidenceColor: Color {
+        switch confidence {
+        case 0.8...1.0: return .green
+        case 0.6..<0.8: return .orange
+        case 0.4..<0.6: return .yellow
+        default: return .red
+        }
+    }
+    
+    private var conditionExplanation: String {
+        switch condition {
+        case .cavity:
+            return "A cavity is a hole in your tooth caused by tooth decay. The \(Int(confidence * 100))% means our AI is \(Int(confidence * 100))% confident it detected signs of decay. Early treatment prevents further damage."
+        case .gingivitis:
+            return "Gingivitis is early gum disease causing inflammation. The \(Int(confidence * 100))% indicates how likely we detected red, swollen gums. Good news: it's reversible with proper care!"
+        case .plaque:
+            return "Plaque is a sticky film of bacteria on teeth. The \(Int(confidence * 100))% shows how confident we are about detecting this buildup. Regular brushing and flossing can remove it."
+        case .tartar:
+            return "Tartar is hardened plaque that can't be removed by brushing. The \(Int(confidence * 100))% indicates detection confidence. Professional cleaning is needed to remove it."
+        case .discoloration:
+            return "Tooth discoloration can be from stains, aging, or other factors. The \(Int(confidence * 100))% shows how likely we detected color changes. Professional whitening can help."
+        case .chippedTeeth:
+            return "A chipped tooth has a small piece broken off. The \(Int(confidence * 100))% indicates detection confidence. Small chips may need cosmetic treatment."
+        case .healthy:
+            return "Healthy teeth show no signs of decay or disease. The \(Int(confidence * 100))% means we're confident your teeth look good! Keep up your current oral care routine."
+        case .deadTooth:
+            return "A dead tooth has lost its blood supply and nerve. The \(Int(confidence * 100))% shows detection confidence. This usually requires root canal treatment."
+        case .misalignedTeeth:
+            return "Misaligned teeth are crooked or don't fit together properly. The \(Int(confidence * 100))% indicates how likely we detected alignment issues. Orthodontic treatment can help."
+        case .rootCanal:
+            return "Root canal treatment is needed for infected tooth pulp. The \(Int(confidence * 100))% shows detection confidence. This procedure saves the tooth from extraction."
+        }
     }
 }
 

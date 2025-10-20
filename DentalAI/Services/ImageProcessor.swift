@@ -4,6 +4,7 @@ import CoreImage
 import Vision
 import CoreGraphics
 import Accelerate
+import SwiftUI
 
 // MARK: - Image Processor
 class ImageProcessor {
@@ -71,7 +72,7 @@ class ImageProcessor {
         let height = cgImage.height
         let bytesPerPixel = 4
         let bytesPerRow = bytesPerPixel * width
-        let bitsPerComponent = 8
+        let _ = 8 // bitsPerComponent
         
         guard let dataProvider = cgImage.dataProvider,
               let data = dataProvider.data,

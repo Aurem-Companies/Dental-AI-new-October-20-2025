@@ -60,7 +60,7 @@ class DataManager: ObservableObject {
         userProfile = profile
     }
     
-    func updateUserProfile(age: Int? = nil, preferences: [String]? = nil, remindersEnabled: Bool? = nil) {
+    func updateUserProfile(age: Int? = nil, preferences: UserPreferences? = nil, remindersEnabled: Bool? = nil) {
         var profile = userProfile
         
         if let age = age {
@@ -108,7 +108,7 @@ class DataManager: ObservableObject {
         
         // Update user profile
         var profile = userProfile
-        profile.analysisHistory = history
+        profile.dentalHistory = history
         saveUserProfile(profile)
     }
     
@@ -127,13 +127,50 @@ class DataManager: ObservableObject {
         }
     }
     
-    func clearAnalysisHistory() {
-        analysisHistory = []
+    func clearAllAnalysisHistory() {
+        let defaults = UserDefaults.standard
+        let fm = FileManager.default
         
-        // Clear image directory
-        try? fileManager.removeItem(at: imagesDirectory)
-        createDirectoriesIfNeeded()
+        // Clear UserDefaults keys
+        defaults.removeObject(forKey: Keys.analysisHistory)
+        defaults.removeObject(forKey: "lastAnalysisResults")
+        defaults.removeObject(forKey: "recentDetections")
+        
+        // Clear Application Support directory safely
+        guard let appSupportURL = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            #if DEBUG
+            print("⚠️ Could not get Application Support directory")
+            #endif
+            return
+        }
+        
+        let dentalAIDirectory = appSupportURL.appendingPathComponent("DentalAI")
+        let analysisDirectory = dentalAIDirectory.appendingPathComponent("Analysis")
+        
+        // Only delete if directory exists
+        if fm.fileExists(atPath: analysisDirectory.path) {
+            do {
+                try fm.removeItem(at: analysisDirectory)
+                #if DEBUG
+                print("🗑️ Cleared Application Support Analysis directory")
+                #endif
+            } catch {
+                #if DEBUG
+                print("⚠️ Could not clear Analysis directory: \(error)")
+                #endif
+            }
+        }
+        
+        // Recreate empty directory for future writes
+        do {
+            try fm.createDirectory(at: analysisDirectory, withIntermediateDirectories: true)
+        } catch {
+            #if DEBUG
+            print("⚠️ Could not recreate Analysis directory: \(error)")
+            #endif
+        }
     }
+    
     
     // MARK: - Image Management
     func saveImage(_ image: UIImage, withName name: String) -> URL? {
@@ -319,7 +356,7 @@ class DataManager: ObservableObject {
         if !profileValidation.isValid {
             issues.append("User profile validation failed")
             // Repair by creating default profile
-            if userProfile.age == nil && userProfile.preferences.isEmpty {
+            if userProfile.age == nil && !userProfile.preferences.notificationsEnabled {
                 userProfile = UserProfile()
                 repaired.append("Created default user profile")
             }
@@ -373,19 +410,23 @@ class DataManager: ObservableObject {
         let backupFiles = try? fileManager.contentsOfDirectory(at: backupDirectory, includingPropertiesForKeys: [.fileSizeKey])
         
         let imageSize = imageFiles?.reduce(0) { total, url in
-            total + (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) ?? 0
+            let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey])
+            let fileSize = resourceValues?.fileSize ?? 0
+            return total + fileSize
         } ?? 0
         
         let backupSize = backupFiles?.reduce(0) { total, url in
-            total + (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) ?? 0
+            let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey])
+            let fileSize = resourceValues?.fileSize ?? 0
+            return total + fileSize
         } ?? 0
         
         let totalSize = imageSize + backupSize
         
         return StorageInfo(
-            totalSize: totalSize,
-            imageSize: imageSize,
-            backupSize: backupSize,
+            totalSize: Int64(totalSize),
+            imageSize: Int64(imageSize),
+            backupSize: Int64(backupSize),
             imageCount: imageFiles?.count ?? 0,
             backupCount: backupFiles?.count ?? 0
         )

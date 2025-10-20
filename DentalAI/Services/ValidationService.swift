@@ -27,7 +27,7 @@ class ValidationService {
         }
         
         // Check image format
-        guard let cgImage = image.cgImage else {
+        guard image.cgImage != nil else {
             errors.append(.unsupportedFormat)
             return ValidationResult(isValid: false, errors: errors, warnings: warnings)
         }
@@ -73,12 +73,12 @@ class ValidationService {
         }
         
         // Check preferences
-        if profile.preferences.isEmpty {
-            warnings.append("No preferences set")
+        if !profile.preferences.notificationsEnabled {
+            warnings.append("Notifications disabled")
         }
         
         // Check analysis history
-        if profile.analysisHistory.isEmpty {
+        if profile.dentalHistory.isEmpty {
             warnings.append("No analysis history available")
         }
         
@@ -148,7 +148,7 @@ class ValidationService {
         do {
             try handler.perform([request])
             
-            if let observations = request.results as? [VNRectangleObservation] {
+            if let observations = request.results {
                 let teethCount = observations.count
                 let confidence = observations.map { $0.confidence }.reduce(0, +) / Float(observations.count)
                 

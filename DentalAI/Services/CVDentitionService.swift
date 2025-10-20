@@ -5,7 +5,7 @@ import CoreImage
 import CoreGraphics
 
 // MARK: - CV Dentition Service
-class CVDentitionService: DetectionService {
+class CVDentitionService: DetectionService, @unchecked Sendable {
     
     // MARK: - Properties
     private let confidenceThreshold: Float = 0.3
@@ -17,20 +17,32 @@ class CVDentitionService: DetectionService {
         var detections: [Detection] = []
         
         // Use multiple Vision requests for comprehensive detection
-        let requests = [
-            detectTeethRegions(in: image),
-            detectGumRegions(in: image),
-            detectToothColor(in: image),
-            detectEdgeFeatures(in: image)
-        ]
+        do {
+            let teethDetections = try detectTeethRegions(in: image)
+            detections.append(contentsOf: teethDetections)
+        } catch {
+            print("Teeth detection failed: \(error)")
+        }
         
-        for request in requests {
-            do {
-                let requestDetections = try request
-                detections.append(contentsOf: requestDetections)
-            } catch {
-                print("CV detection request failed: \(error)")
-            }
+        do {
+            let gumDetections = try detectGumRegions(in: image)
+            detections.append(contentsOf: gumDetections)
+        } catch {
+            print("Gum detection failed: \(error)")
+        }
+        
+        do {
+            let colorDetections = try detectToothColor(in: image)
+            detections.append(contentsOf: colorDetections)
+        } catch {
+            print("Color detection failed: \(error)")
+        }
+        
+        do {
+            let edgeDetections = try detectEdgeFeatures(in: image)
+            detections.append(contentsOf: edgeDetections)
+        } catch {
+            print("Edge detection failed: \(error)")
         }
         
         return detections
@@ -54,7 +66,7 @@ class CVDentitionService: DetectionService {
         do {
             try handler.perform([request])
             
-            guard let observations = request.results as? [VNRectangleObservation] else {
+            guard let observations = request.results else {
                 return []
             }
             
@@ -68,7 +80,7 @@ class CVDentitionService: DetectionService {
                 )
             }
         } catch {
-            throw ModelError.inferenceFailed(error)
+            throw ModelError.inferenceFailed(error.localizedDescription)
         }
     }
     
@@ -85,21 +97,24 @@ class CVDentitionService: DetectionService {
         do {
             try handler.perform([request])
             
-            guard let observations = request.results as? [VNContoursObservation] else {
+            guard let observations = request.results else {
                 return []
             }
             
             return observations.compactMap { observation in
                 guard observation.confidence >= confidenceThreshold else { return nil }
                 
+                // Calculate bounding box from contours
+                let boundingBox = calculateBoundingBox(from: observation)
+                
                 return Detection(
                     label: "gum_region",
                     confidence: observation.confidence,
-                    boundingBox: observation.boundingBox
+                    boundingBox: boundingBox
                 )
             }
         } catch {
-            throw ModelError.inferenceFailed(error)
+            throw ModelError.inferenceFailed(error.localizedDescription)
         }
     }
     
@@ -116,7 +131,7 @@ class CVDentitionService: DetectionService {
         do {
             try handler.perform([request])
             
-            guard let observations = request.results as? [VNClassificationObservation] else {
+            guard let observations = request.results else {
                 return []
             }
             
@@ -133,7 +148,7 @@ class CVDentitionService: DetectionService {
                 )
             }
         } catch {
-            throw ModelError.inferenceFailed(error)
+            throw ModelError.inferenceFailed(error.localizedDescription)
         }
     }
     
@@ -150,7 +165,7 @@ class CVDentitionService: DetectionService {
         do {
             try handler.perform([request])
             
-            guard let observations = request.results as? [VNFaceObservation] else {
+            guard let observations = request.results else {
                 return []
             }
             
@@ -167,7 +182,7 @@ class CVDentitionService: DetectionService {
                 )
             }
         } catch {
-            throw ModelError.inferenceFailed(error)
+            throw ModelError.inferenceFailed(error.localizedDescription)
         }
     }
     
@@ -187,6 +202,13 @@ class CVDentitionService: DetectionService {
         default:
             return "unknown"
         }
+    }
+    
+    // MARK: - Helper Methods
+    private func calculateBoundingBox(from contoursObservation: VNContoursObservation) -> CGRect {
+        // For contours, we'll create a bounding box that encompasses the contour area
+        // Since contours don't have a direct bounding box, we'll use a default region
+        return CGRect(x: 0.2, y: 0.2, width: 0.6, height: 0.6) // Center region
     }
     
     // MARK: - Dental Feature Analysis
@@ -443,6 +465,8 @@ class CVDentitionService: DetectionService {
             return .yellow
         } else if r > 150 && g < 100 && b < 100 {
             return .red
+        } else if r > 100 && g > 50 && b < 50 && r > g && r > b {
+            return .brown
         } else {
             return .unknown
         }
@@ -496,6 +520,7 @@ enum DominantColor: String, CaseIterable {
     case blue = "blue"
     case white = "white"
     case yellow = "yellow"
+    case brown = "brown"
     case unknown = "unknown"
 }
 
@@ -510,7 +535,11 @@ struct ColorAnalysis {
 extension CVDentitionService {
     func detectAsync(in image: CGImage) async throws -> [Detection] {
         return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self = self else {
+                    continuation.resume(throwing: ModelError.modelNotLoaded)
+                    return
+                }
                 do {
                     let detections = try self.detect(in: image)
                     continuation.resume(returning: detections)

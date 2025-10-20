@@ -1,0 +1,364 @@
+--- a/DentalAI/Services/DataManager.swift
++++ b/DentalAI/Services/DataManager.swift
+@@ -130,6 +130,20 @@ class DataManager: ObservableObject {
+         createDirectoriesIfNeeded()
+     }
+     
++    func clearAllAnalysisHistory() {
++        // Clear UserDefaults keys
++        userDefaults.removeObject(forKey: Keys.analysisHistory)
++        userDefaults.removeObject(forKey: "lastAnalysisResults")
++        userDefaults.removeObject(forKey: "recentDetections")
++        
++        // Clear Application Support directory
++        let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
++        let dentalAIDirectory = appSupportURL.appendingPathComponent("DentalAI")
++        let analysisDirectory = dentalAIDirectory.appendingPathComponent("Analysis")
++        
++        do {
++            try fileManager.removeItem(at: analysisDirectory)
++            #if DEBUG
++            print("🗑️ Cleared Application Support Analysis directory")
++            #endif
++        } catch {
++            #if DEBUG
++            print("⚠️ Could not clear Analysis directory: \(error)")
++            #endif
++        }
++    }
++    
+     // MARK: - Image Management
+     func saveImage(_ image: UIImage, withName name: String) -> URL? {
+         guard let imageData = image.jpegData(compressionQuality: 0.8) else { return nil }
+
+--- a/DentalAI/Config/FeatureFlags.swift
++++ b/DentalAI/Config/FeatureFlags.swift
+@@ -24,6 +24,16 @@ struct FeatureFlags {
+         }
+     }
+     
++    // MARK: - ONNX Detection
++    static var useONNXDetection: Bool {
++        get {
++            return UserDefaults.standard.bool(forKey: "useONNXDetection")
++        }
++        set {
++            UserDefaults.standard.set(newValue, forKey: "useONNXDetection")
++        }
++    }
++    
+     // MARK: - Fallback Behavior
+     static var enableFallback: Bool {
+         get {
+@@ -73,6 +83,10 @@ struct FeatureFlags {
+         if UserDefaults.standard.object(forKey: "useCVDetection") == nil {
+             useCVDetection = true
+         }
++        
++        if UserDefaults.standard.object(forKey: "useONNXDetection") == nil {
++            useONNXDetection = false
++        }
+         
+         if UserDefaults.standard.object(forKey: "enableFallback") == nil {
+             enableFallback = true
+@@ -88,6 +102,7 @@ struct FeatureFlags {
+     static func resetToDefaults() {
+         useMLDetection = true
+         useCVDetection = true
++        useONNXDetection = false
+         enableFallback = true
+         debugMode = false
+         highPerformanceMode = false
+@@ -99,6 +114,7 @@ struct FeatureFlags {
+         var status = "Feature Flags Status:\n"
+         status += "• ML Detection: \(useMLDetection ? "Enabled" : "Disabled")\n"
+         status += "• CV Detection: \(useCVDetection ? "Enabled" : "Disabled")\n"
++        status += "• ONNX Detection: \(useONNXDetection ? "Enabled" : "Disabled")\n"
+         status += "• Fallback: \(enableFallback ? "Enabled" : "Disabled")\n"
+         status += "• Debug Mode: \(debugMode ? "Enabled" : "Disabled")\n"
+         status += "• High Performance: \(highPerformanceMode ? "Enabled" : "Disabled")\n"
+@@ -137,6 +153,7 @@ extension FeatureFlags {
+         if isDevelopment {
+             // Development defaults
+             useMLDetection = true
+             useCVDetection = true
++            useONNXDetection = false
+             enableFallback = true
+             debugMode = true
+             highPerformanceMode = false
+@@ -145,6 +162,7 @@ extension FeatureFlags {
+         } else {
+             // Production defaults
+             useMLDetection = true
+             useCVDetection = true
++            useONNXDetection = false
+             enableFallback = true
+             debugMode = false
+             highPerformanceMode = true
+
+--- a/DentalAI/Services/DetectionFactory.swift
++++ b/DentalAI/Services/DetectionFactory.swift
+@@ -7,16 +7,25 @@ class DetectionFactory {
+     
+     // MARK: - Factory Methods
+     static func make() -> DetectionService {
+-        return make(useMLDetection: FeatureFlags.useMLDetection)
++        return makeWithFallback()
+     }
+     
+-    static func make(useMLDetection: Bool) -> DetectionService {
+-        if useMLDetection {
++    static func makeWithFeatureFlags() -> DetectionService {
++        if FeatureFlags.useMLDetection {
+             return makeMLDetectionService()
++        } else if FeatureFlags.useONNXDetection {
++            return makeONNXDetectionService()
+         } else {
+             return makeCVDetectionService()
+         }
+     }
+     
+     // MARK: - Service Creation
+     private static func makeMLDetectionService() -> DetectionService {
+@@ -34,12 +43,20 @@ class DetectionFactory {
+     
+     // MARK: - Service with Fallback
+     static func makeWithFallback() -> DetectionService {
+-        let primaryService = makeMLDetectionService()
+-        
+-        // If primary service fails, return fallback service
+-        if let mlService = primaryService as? MLDetectionService, !mlService.isModelAvailable {
+-            return makeCVDetectionService()
++        if FeatureFlags.useMLDetection {
++            do {
++                let service = makeMLDetectionService()
++                return service
++            } catch {
++                if FeatureFlags.enableFallback {
++                    return makeCVDetectionService()
++                }
++            }
++        } else if FeatureFlags.useONNXDetection {
++            do {
++                let service = makeONNXDetectionService()
++                return service
++            } catch {
++                if FeatureFlags.enableFallback {
++                    return makeCVDetectionService()
++                }
++            }
+         }
+-        
+-        return primaryService
++        
++        return makeCVDetectionService()
+     }
+     
+     // MARK: - Service Validation
+@@ -48,6 +65,8 @@ class DetectionFactory {
+         case is MLDetectionService:
+             return (service as! MLDetectionService).isModelAvailable
+         case is CVDentitionService:
+             return true // CV service is always available
++        case is ONNXDetectionService:
++            return true // ONNX service is always available
+         default:
+             return false
+         }
+@@ -59,6 +78,8 @@ class DetectionFactory {
+             return "ML Detection Service - \(mlService.modelStatus)"
+         case is CVDentitionService:
+             return "CV Detection Service - Available"
++        case is ONNXDetectionService:
++            return "ONNX Detection Service - Available"
+         default:
+             return "Unknown Service"
+         }
+@@ -66,6 +87,7 @@ class DetectionFactory {
+     
+     // MARK: - Service Comparison
+     static func compareServices() -> String {
+         let mlService = MLDetectionService()
++        let onnxService = ONNXDetectionService()
+         let _ = CVDentitionService()
+         
+         var comparison = "Service Comparison:\n"
+         comparison += "• ML Service: \(mlService.isModelAvailable ? "Available" : "Not Available")\n"
++        comparison += "• ONNX Service: Available\n"
+         comparison += "• CV Service: Available\n"
+         comparison += "• Current Selection: \(FeatureFlags.useMLDetection ? "ML" : "CV")\n"
+         comparison += "• Fallback Enabled: \(FeatureFlags.enableFallback)"
+@@ -99,6 +121,10 @@ extension DetectionFactory {
+         // Test ML Service
+         let mlService = MLDetectionService()
+         results["ML"] = testDetection(service: mlService, image: image)
++        
++        // Test ONNX Service
++        let onnxService = ONNXDetectionService()
++        results["ONNX"] = testDetection(service: onnxService, image: image)
+         
+         // Test CV Service
+         let cvService = CVDentitionService()
+@@ -124,6 +150,9 @@ extension DetectionFactory {
+         if service is MLDetectionService {
+             // ML-specific configuration could go here
+             print("Configuring ML Detection Service")
++        } else if service is ONNXDetectionService {
++            // ONNX-specific configuration could go here
++            print("Configuring ONNX Detection Service")
+         } else if service is CVDentitionService {
+             // CV-specific configuration could go here
+             print("Configuring CV Detection Service")
+@@ -139,6 +168,13 @@ extension DetectionFactory {
+                 "Confidence scoring"
+             ]
+         case is ONNXDetectionService:
++            return [
++                "ONNX model inference",
++                "Cross-platform compatibility",
++                "Fast processing",
++                "Confidence scoring"
++            ]
++        case is CVDentitionService:
+             return [
+                 "Computer vision detection",
+                 "No model required",
+@@ -150,4 +186,19 @@ extension DetectionFactory {
+             return []
+         }
+     }
+ }
++
++// MARK: - Model Loading Helper
++enum ModelLoadError: Error {
++    case modelNotFound(String)
++    case invalidModel
++    case loadingFailed(String)
++}
++
++func modelURL(named name: String, ext: String) throws -> URL {
++    guard let modelURL = Bundle.main.url(forResource: name, withExtension: ext) else {
++        throw ModelLoadError.modelNotFound("\(name).\(ext)")
++    }
++    return modelURL
++}
+
+--- a/DentalAI.xcodeproj/project.pbxproj
++++ b/DentalAI.xcodeproj/project.pbxproj
+@@ -350,7 +350,7 @@
+ 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+ 				GCC_WARN_UNUSED_FUNCTION = YES;
+ 				GCC_WARN_UNUSED_VARIABLE = YES;
+-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
++				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+ 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+ 				MTL_FAST_MATH = YES;
+ 				ONLY_ACTIVE_ARCH = YES;
+@@ -408,7 +408,7 @@
+ 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+ 				GCC_WARN_UNUSED_FUNCTION = YES;
+ 				GCC_WARN_UNUSED_VARIABLE = YES;
+-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
++				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+ 				MTL_ENABLE_DEBUG_INFO = NO;
+ 				MTL_FAST_MATH = YES;
+ 				SDKROOT = iphoneos;
+@@ -436,7 +436,7 @@
+ 				ENABLE_PREVIEWS = YES;
+ 				GENERATE_INFOPLIST_FILE = YES;
+ 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
++				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+ 				LD_RUNPATH_SEARCH_PATHS = (
+ 					"$(inherited)",
+ 					"@executable_path/Frameworks",
+@@ -468,7 +468,7 @@
+ 				ENABLE_PREVIEWS = YES;
+ 				GENERATE_INFOPLIST_FILE = YES;
+ 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
++				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+ 				LD_RUNPATH_SEARCH_PATHS = (
+ 					"$(inherited)",
+ 					"@executable_path/Frameworks",
+
+--- /dev/null
++++ b/DentalAI/Info.plist
+@@ -0,0 +1,44 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0">
++<dict>
++	<key>CFBundleDevelopmentRegion</key>
++	<string>$(DEVELOPMENT_LANGUAGE)</string>
++	<key>CFBundleExecutable</key>
++	<string>$(EXECUTABLE_NAME)</string>
++	<key>CFBundleIdentifier</key>
++	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
++	<key>CFBundleInfoDictionaryVersion</key>
++	<string>6.0</string>
++	<key>CFBundleName</key>
++	<string>$(PRODUCT_NAME)</string>
++	<key>CFBundlePackageType</key>
++	<string>APPL</string>
++	<key>CFBundleShortVersionString</key>
++	<string>1.0</string>
++	<key>CFBundleVersion</key>
++	<string>1</string>
++	<key>LSRequiresIPhoneOS</key>
++	<true/>
++	<key>NSCameraUsageDescription</key>
++	<string>DentalAI needs camera access to take photos of your teeth for analysis and health monitoring.</string>
++	<key>NSPhotoLibraryUsageDescription</key>
++	<string>DentalAI needs photo library access to analyze existing photos of your teeth for health monitoring.</string>
++	<key>NSPhotoLibraryAddUsageDescription</key>
++	<string>DentalAI needs permission to save analyzed photos to your photo library for your records.</string>
++	<key>UIApplicationSceneManifest</key>
++	<dict>
++		<key>UIApplicationSupportsMultipleScenes</key>
++		<false/>
++		<key>UISceneConfigurations</key>
++		<dict>
++			<key>UIWindowSceneSessionRoleApplication</key>
++			<array>
++				<dict>
++					<key>UISceneConfigurationName</key>
++					<string>Default Configuration</string>
++					<key>UISceneDelegateClassName</key>
++					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
++				</dict>
++			</array>
++		</dict>
++	</dict>
++</dict>
++</plist>
+
+--- a/DentalAITests/DentalAIUITests.swift
++++ b/DentalAITests/DentalAIUITests.swift
+@@ -18,6 +18,22 @@ class DentalAIUITests: XCTestCase {
+     // MARK: - Launch Tests
+     func testAppLaunch() throws {
+         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
+         XCTAssertTrue(app.navigationBars["🦷 DentalAI"].exists)
+     }
++    
++    // MARK: - Smoke Test - Core Functionality
++    func testSmokeTest() throws {
++        // Verify app launches successfully
++        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
++        
++        // Verify main UI elements exist
++        XCTAssertTrue(app.buttons["Take Photo"].exists)
++        XCTAssertTrue(app.buttons["Choose from Library"].exists)
++        
++        // Verify tab navigation works
++        app.tabBars.buttons["History"].tap()
++        XCTAssertTrue(app.navigationBars["📋 History"].exists)
++        
++        app.tabBars.buttons["Profile"].tap()
++        XCTAssertTrue(app.navigationBars["👤 Profile"].exists)
++        
++        app.tabBars.buttons["Home"].tap()
++        XCTAssertTrue(app.navigationBars["🦷 DentalAI"].exists)
++    }
+

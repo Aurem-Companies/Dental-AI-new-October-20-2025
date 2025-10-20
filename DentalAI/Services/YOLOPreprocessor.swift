@@ -186,7 +186,7 @@ class YOLOPreprocessor {
     func postprocessOutputs(_ outputs: [Float], imageSize: CGSize) throws -> [Detection] {
         let numDetections = 25200 // YOLOv8 default
         let numClasses = 10 // Number of dental conditions
-        let numAnchors = 3
+        let _ = 3 // numAnchors
         
         var detections: [Detection] = []
         
@@ -369,10 +369,10 @@ class YOLOPreprocessor {
         }
         
         // Calculate image quality metrics
-        let sharpness = calculateSharpness(bytes: bytes, width: width, height: height, bytesPerRow: bytesPerRow)
-        let brightness = calculateBrightness(bytes: bytes, width: width, height: height, bytesPerRow: bytesPerRow)
-        let contrast = calculateContrast(bytes: bytes, width: width, height: height, bytesPerRow: bytesPerRow)
-        let blur = calculateBlur(bytes: bytes, width: width, height: height, bytesPerRow: bytesPerRow)
+        let sharpness = calculateSharpness(bytes: bytes, width: width, height: height, bytesPerRow: bytesPerRow, bytesPerPixel: bytesPerPixel)
+        let brightness = calculateBrightness(bytes: bytes, width: width, height: height, bytesPerRow: bytesPerRow, bytesPerPixel: bytesPerPixel)
+        let contrast = calculateContrast(bytes: bytes, width: width, height: height, bytesPerRow: bytesPerRow, bytesPerPixel: bytesPerPixel)
+        let blur = calculateBlur(bytes: bytes, width: width, height: height, bytesPerRow: bytesPerRow, bytesPerPixel: bytesPerPixel)
         
         let overallScore = (sharpness + brightness + contrast + (1.0 - blur)) / 4.0
         let qualityLevel = determineQualityLevel(overallScore)
@@ -388,7 +388,7 @@ class YOLOPreprocessor {
     }
     
     // MARK: - Quality Calculation Methods
-    private func calculateSharpness(bytes: UnsafePointer<UInt8>, width: Int, height: Int, bytesPerRow: Int) -> Float {
+    private func calculateSharpness(bytes: UnsafePointer<UInt8>, width: Int, height: Int, bytesPerRow: Int, bytesPerPixel: Int) -> Float {
         var laplacianSum: Float = 0.0
         var laplacianSquaredSum: Float = 0.0
         let count = Float((width - 2) * (height - 2))
@@ -414,7 +414,7 @@ class YOLOPreprocessor {
         return min(1.0, max(0.0, variance / 1000.0))
     }
     
-    private func calculateBrightness(bytes: UnsafePointer<UInt8>, width: Int, height: Int, bytesPerRow: Int) -> Float {
+    private func calculateBrightness(bytes: UnsafePointer<UInt8>, width: Int, height: Int, bytesPerRow: Int, bytesPerPixel: Int) -> Float {
         var totalBrightness: Float = 0.0
         let pixelCount = Float(width * height)
         
@@ -433,7 +433,7 @@ class YOLOPreprocessor {
         return totalBrightness / pixelCount / 255.0
     }
     
-    private func calculateContrast(bytes: UnsafePointer<UInt8>, width: Int, height: Int, bytesPerRow: Int) -> Float {
+    private func calculateContrast(bytes: UnsafePointer<UInt8>, width: Int, height: Int, bytesPerRow: Int, bytesPerPixel: Int) -> Float {
         var grayPixels: [Float] = []
         
         for y in 0..<height {
@@ -455,7 +455,7 @@ class YOLOPreprocessor {
         return standardDeviation / 128.0
     }
     
-    private func calculateBlur(bytes: UnsafePointer<UInt8>, width: Int, height: Int, bytesPerRow: Int) -> Float {
+    private func calculateBlur(bytes: UnsafePointer<UInt8>, width: Int, height: Int, bytesPerRow: Int, bytesPerPixel: Int) -> Float {
         var gradientSum: Float = 0.0
         let count = Float((width - 1) * (height - 1))
         

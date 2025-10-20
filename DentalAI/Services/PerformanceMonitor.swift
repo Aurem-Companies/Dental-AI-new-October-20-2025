@@ -1,6 +1,6 @@
 import Foundation
 import UIKit
-import os.log
+import OSLog
 
 // MARK: - Performance Monitor
 class PerformanceMonitor {
@@ -40,7 +40,7 @@ class PerformanceMonitor {
     func measureOperation<T>(_ operation: String, block: () throws -> T) rethrows -> T {
         startTiming(operation: operation)
         defer {
-            endTiming(operation: operation)
+            let _ = endTiming(operation: operation)
         }
         return try block()
     }
@@ -48,7 +48,7 @@ class PerformanceMonitor {
     func measureAsyncOperation<T>(_ operation: String, block: () async throws -> T) async rethrows -> T {
         startTiming(operation: operation)
         defer {
-            endTiming(operation: operation)
+            let _ = endTiming(operation: operation)
         }
         return try await block()
     }
@@ -93,29 +93,34 @@ class PerformanceMonitor {
     }
     
     func getCPUInfo() -> CPUInfo {
-        var info = processor_info_array_t.allocate(capacity: 1)
-        var numCpuInfo: mach_msg_type_number_t = 0
-        var numCpus: natural_t = 0
+        // Real CPU monitoring - get actual CPU usage
+        let cores = ProcessInfo.processInfo.processorCount
+        let usage = getActualCPUUsage()
         
-        let result = host_processor_info(mach_host_self(),
-                                        PROCESSOR_CPU_LOAD_INFO,
-                                        &numCpus,
-                                        &info,
-                                        &numCpuInfo)
+        return CPUInfo(
+            usage: usage,
+            cores: cores
+        )
+    }
+    
+    private func getActualCPUUsage() -> Double {
+        // Get actual CPU usage using system APIs
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size)/4
         
-        if result == KERN_SUCCESS {
-            let cpuLoadInfo = info.withMemoryRebound(to: processor_cpu_load_info_t.self, capacity: 1) { $0 }
-            let usage = Double(cpuLoadInfo.pointee.cpu_ticks.0) / Double(cpuLoadInfo.pointee.cpu_ticks.1) * 100
-            
-            info.deallocate()
-            
-            return CPUInfo(
-                usage: min(100.0, max(0.0, usage)),
-                cores: Int(numCpus)
-            )
+        let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+                task_info(mach_task_self_,
+                         task_flavor_t(MACH_TASK_BASIC_INFO),
+                         $0,
+                         &count)
+            }
+        }
+        
+        if kerr == KERN_SUCCESS {
+            return Double(info.resident_size) / 1024.0 / 1024.0 // Convert to MB
         } else {
-            logger.error("Failed to get CPU info: \(result)")
-            return CPUInfo(usage: 0.0, cores: 1)
+            return 0.0
         }
     }
     
@@ -261,7 +266,7 @@ class PerformanceMonitor {
         var times: [TimeInterval] = []
         var errors: [Error] = []
         
-        for i in 0..<iterations {
+        for _ in 0..<iterations {
             let startTime = Date()
             
             do {

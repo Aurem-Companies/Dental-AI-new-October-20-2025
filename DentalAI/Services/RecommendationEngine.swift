@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 // MARK: - Recommendation Engine
-class RecommendationEngine {
+class RecommendationEngine: ObservableObject {
     
     // MARK: - Properties
     private let dataManager = DataManager.shared
@@ -14,7 +14,7 @@ class RecommendationEngine {
         // Generate recommendations based on detected conditions
         for (condition, confidence) in result.detectedConditions {
             if confidence > 0.5 {
-                let conditionRecommendations = generateRecommendationsForCondition(condition, confidence: confidence, userProfile: userProfile)
+                let conditionRecommendations = generateRecommendationsForCondition(condition, confidence: Float(confidence), userProfile: userProfile)
                 recommendations.append(contentsOf: conditionRecommendations)
             }
         }
@@ -364,7 +364,7 @@ class RecommendationEngine {
     private func generateHistoryBasedRecommendations(for result: DentalAnalysisResult, userProfile: UserProfile) -> [Recommendation] {
         var recommendations: [Recommendation] = []
         
-        let history = userProfile.analysisHistory
+        let history = userProfile.dentalHistory
         guard !history.isEmpty else { return recommendations }
         
         // Analyze trends
@@ -643,5 +643,103 @@ class RecommendationEngine {
         }
         
         return uniqueRecommendations
+    }
+    
+    // MARK: - Product Comparison
+    func getProductComparison() -> [ProductComparison] {
+        return [
+            ProductComparison(
+                name: "Crest Pro-Health Advanced",
+                effectiveness: 0.92,
+                effectivenessRating: "Excellent",
+                benefits: [
+                    "Fights cavities and gingivitis",
+                    "Reduces plaque buildup",
+                    "Strengthens enamel",
+                    "Fresh breath protection"
+                ],
+                drawbacks: [
+                    "May cause sensitivity",
+                    "Higher price point"
+                ],
+                bestFor: [
+                    "Daily use",
+                    "Gum health",
+                    "Cavity prevention"
+                ],
+                price: 4.99,
+                category: "Toothpaste",
+                brand: "Crest"
+            ),
+            ProductComparison(
+                name: "Colgate Total Advanced",
+                effectiveness: 0.89,
+                effectivenessRating: "Very Good",
+                benefits: [
+                    "12-hour protection",
+                    "Antibacterial formula",
+                    "Whitening power",
+                    "Fresh taste"
+                ],
+                drawbacks: [
+                    "May stain teeth over time",
+                    "Strong flavor"
+                ],
+                bestFor: [
+                    "Long-lasting protection",
+                    "Whitening",
+                    "Daily hygiene"
+                ],
+                price: 3.99,
+                category: "Toothpaste",
+                brand: "Colgate"
+            ),
+            ProductComparison(
+                name: "Sensodyne Pronamel",
+                effectiveness: 0.85,
+                effectivenessRating: "Good",
+                benefits: [
+                    "Gentle on sensitive teeth",
+                    "Strengthens enamel",
+                    "Low abrasion",
+                    "Mint flavor"
+                ],
+                drawbacks: [
+                    "Less whitening power",
+                    "Higher cost"
+                ],
+                bestFor: [
+                    "Sensitive teeth",
+                    "Enamel protection",
+                    "Gentle cleaning"
+                ],
+                price: 5.99,
+                category: "Toothpaste",
+                brand: "Sensodyne"
+            ),
+            ProductComparison(
+                name: "Oral-B Pro 1000",
+                effectiveness: 0.88,
+                effectivenessRating: "Very Good",
+                benefits: [
+                    "Rotating brush head",
+                    "Pressure sensor",
+                    "2-minute timer",
+                    "Removes more plaque"
+                ],
+                drawbacks: [
+                    "Requires charging",
+                    "Brush heads expensive"
+                ],
+                bestFor: [
+                    "Deep cleaning",
+                    "Plaque removal",
+                    "Gum health"
+                ],
+                price: 39.99,
+                category: "Electric Toothbrush",
+                brand: "Oral-B"
+            )
+        ]
     }
 }
