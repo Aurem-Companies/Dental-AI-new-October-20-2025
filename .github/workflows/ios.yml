@@ -9,6 +9,8 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode.app
       - name: Show Xcode version
         run: xcodebuild -version
+      - name: List available schemes
+        run: ./scripts/ci_list_schemes.sh
       - name: Build
         run: |
           rm -rf ~/Library/Developer/Xcode/DerivedData
@@ -16,10 +18,12 @@ jobs:
             xcodebuild -workspace "DentalAI.xcworkspace" \
                        -scheme "DentalAI" \
                        -destination 'generic/platform=iOS Simulator' \
+                       CODE_SIGNING_ALLOWED=NO \
                        clean build
           else
             xcodebuild -project "DentalAI.xcodeproj" \
                        -scheme "DentalAI" \
                        -destination 'generic/platform=iOS Simulator' \
+                       CODE_SIGNING_ALLOWED=NO \
                        clean build
           fi

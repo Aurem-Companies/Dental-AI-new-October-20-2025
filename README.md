@@ -1,15 +1,18 @@
 # DentalAI - iOS Dental Health Analysis App
 
-A comprehensive iOS application that uses AI-powered image analysis to help users monitor their dental health by analyzing photos of their teeth and providing personalized recommendations.
+A comprehensive iOS application that uses AI-powered image analysis to help users monitor visible changes in their teeth by analyzing photos and providing educational insights and recommendations.
+
+## Important Disclaimer
+DentalAI provides educational image analysis to help you monitor visible changes in photos of your teeth. It is **not a medical device** and does **not provide diagnosis or treatment recommendations**. For concerns, consult a licensed dentist.
 
 ## Features
 
 ### 🦷 Core Functionality
 - **Photo Capture**: Take photos of your teeth using the device camera with real-time quality validation
-- **AI Analysis**: Advanced computer vision algorithms and ML models analyze dental conditions
-- **Condition Detection**: Identifies cavities, gingivitis, discoloration, plaque, tartar, dead teeth, root canals, chipped teeth, misaligned teeth, and healthy conditions
-- **Personalized Recommendations**: Tailored advice based on detected conditions, user age, history, and seasonal trends
-- **Progress Tracking**: Monitor your dental health over time with detailed analytics and trend analysis
+- **AI Analysis**: Advanced computer vision algorithms and ML models analyze visual patterns
+- **Pattern Detection**: Identifies visual patterns related to cavities, gingivitis, discoloration, plaque, tartar, dead teeth, root canals, chipped teeth, misaligned teeth, and healthy conditions
+- **Educational Recommendations**: Educational insights based on detected patterns, user age, history, and seasonal trends
+- **Progress Tracking**: Monitor visible changes over time with detailed analytics and trend analysis
 - **Health Scoring**: Overall dental health score from 0-100 with confidence levels
 - **Performance Monitoring**: Built-in performance tracking and optimization
 - **User Feedback System**: Comprehensive feedback collection and analysis for continuous improvement
@@ -27,7 +30,7 @@ A comprehensive iOS application that uses AI-powered image analysis to help user
 ### 🔒 Privacy & Security
 - **Local Processing**: On-device image analysis for privacy
 - **Data Encryption**: Secure storage of user data
-- **HIPAA Compliance**: Medical data handling best practices
+- **Privacy Protection**: Secure data handling practices
 - **User Control**: Full control over data sharing and deletion
 
 ## Technical Architecture
@@ -96,29 +99,29 @@ A comprehensive iOS application that uses AI-powered image analysis to help user
 
 ## AI Analysis Capabilities
 
-### Detectable Conditions
-- **Cavities**: Tooth decay detection
-- **Gingivitis**: Gum inflammation
-- **Discoloration**: Tooth staining and yellowing
-- **Plaque**: Bacterial buildup
-- **Tartar**: Hardened plaque
-- **Dead Tooth**: Non-vital teeth
-- **Root Canal**: Treatment indicators
-- **Chipped Teeth**: Structural damage
-- **Misaligned Teeth**: Alignment issues
-- **Healthy**: Good oral health
+### Detectable Patterns
+- **Cavities**: Visual patterns related to tooth decay
+- **Gingivitis**: Visual patterns related to gum inflammation
+- **Discoloration**: Visual patterns related to tooth staining and yellowing
+- **Plaque**: Visual patterns related to bacterial buildup
+- **Tartar**: Visual patterns related to hardened plaque
+- **Dead Tooth**: Visual patterns related to non-vital teeth
+- **Root Canal**: Visual patterns related to treatment indicators
+- **Chipped Teeth**: Visual patterns related to structural damage
+- **Misaligned Teeth**: Visual patterns related to alignment issues
+- **Healthy**: Visual patterns indicating good oral health
 
 ### Analysis Methods
 - **Rule-based Detection**: Color, texture, and shape analysis
 - **Computer Vision**: Edge detection and pattern recognition
-- **Machine Learning**: Trained models for condition classification
+- **Machine Learning**: Trained models for pattern classification
 - **Confidence Scoring**: Reliability assessment for each detection
 
 ## Recommendations System
 
 ### Categories
 - **Home Care**: Brushing, flossing, and oral hygiene
-- **Professional Care**: Dental appointments and treatments
+- **General Dental Health**: General dental health information
 - **Lifestyle Changes**: Diet, habits, and preventive measures
 - **Product Recommendations**: Toothpaste, mouthwash, and tools
 - **Emergency Care**: Urgent dental situations

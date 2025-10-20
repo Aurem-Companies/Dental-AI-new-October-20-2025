@@ -11,6 +11,7 @@
 		A1234567890ABCDEF003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF004 /* ContentView.swift */; };
 		A1234567890ABCDEF005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF006 /* Assets.xcassets */; };
 		A1234567890ABCDEF007 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF008 /* Preview Assets.xcassets */; };
+		A1234567890ABCDEF008 /* dental_model.onnx in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF009 /* dental_model.onnx */; };
 		A1234567890ABCDEF009 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF010 /* CameraView.swift */; };
 		A1234567890ABCDEF010A /* PhotoLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF010B /* PhotoLibraryView.swift */; };
 		A1234567890ABCDEF010C /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF010D /* UserProfileView.swift */; };
@@ -46,6 +47,7 @@
 		A1234567890ABCDEF004 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF006 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1234567890ABCDEF008 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		A1234567890ABCDEF009 /* dental_model.onnx */ = {isa = PBXFileReference; lastKnownFileType = file; path = dental_model.onnx; sourceTree = "<group>"; };
 		A1234567890ABCDEF010 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF010B /* PhotoLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryView.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF010D /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileView.swift; sourceTree = "<group>"; };
@@ -93,6 +95,7 @@
 			children = (
 				A1234567890ABCDEF024 /* DentalAI */,
 				A1234567890ABCDEF025 /* Products */,
+				A1234567890ABCDEF009 /* dental_model.onnx */,
 			);
 			sourceTree = "<group>";
 		};
@@ -251,6 +254,7 @@
 			files = (
 				A1234567890ABCDEF005 /* Assets.xcassets in Resources */,
 				A1234567890ABCDEF007 /* Preview Assets.xcassets in Resources */,
+				A1234567890ABCDEF008 /* dental_model.onnx in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
