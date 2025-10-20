@@ -35,27 +35,27 @@ class DetectionFactory {
     }
     
     // MARK: - Service with Fallback
-    static func makeWithFallback() -> DetectionService {
-        // 1) Try ONNX first if enabled and model available
-        if FeatureFlags.useONNXDetection {
+    static func makeWithFallback(flags: FeatureFlags = .current) -> DetectionService {
+        // Priority: ONNX -> ML -> CV (as you verified previously)
+        if flags.useONNXDetection {
             #if canImport(ONNXRuntime) || canImport(OrtMobile)
-            let onnxService = makeONNXDetectionService()
-            if let onnxService = onnxService as? ONNXDetectionService, onnxService.isModelAvailable {
-                return onnxService
+            let onnx = ONNXDetectionService()
+            if onnx.isModelAvailable {
+                return onnx
             }
             #endif
+            // No ONNX libs or not available -> fall through
         }
-        
-        // 2) Try ML if enabled and model available
-        if FeatureFlags.useMLDetection {
-            let mlService = makeMLDetectionService()
-            if let mlService = mlService as? MLDetectionService, mlService.isModelAvailable {
-                return mlService
+
+        if flags.useMLDetection {
+            let ml = MLDetectionService()
+            if ml.isModelAvailable {
+                return ml
             }
         }
-        
-        // 3) Fall back to CV
-        return makeCVDetectionService()
+
+        // Fallback to CV always available path
+        return CVDentitionService()
     }
     
     // MARK: - Service Validation
@@ -172,15 +172,17 @@ extension DetectionFactory {
         if service is MLDetectionService {
             // ML-specific configuration could go here
             print("Configuring ML Detection Service")
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
-        } else if service is ONNXDetectionService {
-            // ONNX-specific configuration could go here
-            print("Configuring ONNX Detection Service")
-        #endif
         } else if service is CVDentitionService {
             // CV-specific configuration could go here
             print("Configuring CV Detection Service")
         }
+        
+        #if canImport(ONNXRuntime) || canImport(OrtMobile)
+        if service is ONNXDetectionService {
+            // ONNX-specific configuration could go here
+            print("Configuring ONNX Detection Service")
+        }
+        #endif
     }
     
     // MARK: - Service Capabilities

@@ -23,6 +23,16 @@ struct FeatureFlags {
         }
     }
     
+    // MARK: - CV Detection
+    static var useCVDetection: Bool {
+        get {
+            return UserDefaults.standard.object(forKey: "useCVDetection") as? Bool ?? true
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "useCVDetection")
+        }
+    }
+    
     
     // MARK: - Fallback Behavior
     static var enableFallback: Bool {
@@ -82,12 +92,8 @@ struct FeatureFlags {
     }
     
     // MARK: - Current Configuration (with resource-based defaults)
-    static var current: (useMLDetection: Bool, useONNXDetection: Bool, enableFallback: Bool) {
-        return (
-            useMLDetection: UserDefaults.standard.object(forKey: "useMLDetection") != nil ? useMLDetection : hasBundledML,
-            useONNXDetection: UserDefaults.standard.object(forKey: "useONNXDetection") != nil ? useONNXDetection : hasBundledONNX,
-            enableFallback: true
-        )
+    static var current: FeatureFlags {
+        return FeatureFlags()
     }
     
     // MARK: - Default Configuration
