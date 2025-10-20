@@ -26,13 +26,17 @@ jobs:
           set -euo pipefail
           if [ -e "DentalAI.xcworkspace" ]; then
             echo "ws=-workspace DentalAI.xcworkspace" >> $GITHUB_OUTPUT
-            scheme=$(xcodebuild -list -workspace DentalAI.xcworkspace 2>/dev/null | awk -v RS= -F'\n' '/Schemes:/{getline; print $1; exit}')
+            SCHEME=$(xcodebuild -list -workspace DentalAI.xcworkspace 2>/dev/null | awk -v RS= -F'\n' '/Schemes:/{getline; gsub(/^[ \t]+|[ \t]+$/,""); print; exit}')
           else
             echo "ws=-project DentalAI.xcodeproj" >> $GITHUB_OUTPUT
-            scheme=$(xcodebuild -list -project DentalAI.xcodeproj 2>/dev/null | awk -v RS= -F'\n' '/Schemes:/{getline; print $1; exit}')
+            SCHEME=$(xcodebuild -list -project DentalAI.xcodeproj 2>/dev/null | awk -v RS= -F'\n' '/Schemes:/{getline; gsub(/^[ \t]+|[ \t]+$/,""); print; exit}')
           fi
-          echo "scheme=${scheme}" >> $GITHUB_OUTPUT
-          echo "Detected scheme: ${scheme}"
+          echo "scheme=${SCHEME}" >> $GITHUB_OUTPUT
+          if [ -z "${SCHEME}" ]; then
+            echo "::error ::No shared scheme detected. Ensure DentalAI.xcodeproj/xcshareddata/xcschemes/*.xcscheme is committed."
+            exit 65
+          fi
+          echo "Detected scheme: ${SCHEME}"
 
       - name: Resolve packages
         run: |
@@ -40,29 +44,30 @@ jobs:
             -scheme "${{ steps.detect.outputs.scheme }}" \
             -resolvePackageDependencies
 
-      - name: Build (Simulator, no signing)
+      - name: Build (generic simulator, no signing)
         env:
           NSUnbufferedIO: "YES"
         run: |
           set -o pipefail
+          : > build.log
           xcodebuild ${{ steps.detect.outputs.ws }} \
             -scheme "${{ steps.detect.outputs.scheme }}" \
-            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -destination 'generic/platform=iOS Simulator' \
             -sdk iphonesimulator \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            clean build | tee build.log
+            clean build 2>&1 | tee -a build.log
 
       - name: Show first error (if any)
         if: failure()
         run: |
           echo "----- FIRST ERROR CONTEXT -----"
           awk '/^error:|^fatal error:/ {print; exit}' build.log || true
-          echo "----- LAST 60 LINES -----"
-          tail -n 60 build.log || true
+          echo "----- LAST 120 LINES -----"
+          tail -n 120 build.log || true
 
       - name: Upload build log
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
