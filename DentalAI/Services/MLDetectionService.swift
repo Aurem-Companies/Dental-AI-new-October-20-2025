@@ -13,7 +13,7 @@ class MLDetectionService: DetectionService, @unchecked Sendable {
     private let confidenceThreshold: Float = 0.5
     private let nmsThreshold: Float = 0.4
     
-    // MARK: - Model Availability
+    // MARK: - Model Availability (single source of truth)
     var isModelAvailable: Bool {
         return model != nil
     }
@@ -143,19 +143,6 @@ class MLDetectionService: DetectionService, @unchecked Sendable {
         
         return Float(intersectionArea / unionArea)
     }
-    
-    // MARK: - Model Status
-    var isModelAvailable: Bool {
-        return model != nil
-    }
-    
-    var modelStatus: String {
-        if model != nil {
-            return "Model loaded: \(modelName)"
-        } else {
-            return "Model not available: \(modelName)"
-        }
-    }
 }
 
 
@@ -270,8 +257,8 @@ protocol ModelUpdateHandler: AnyObject {
 // MARK: - Model Manager
 class ModelManager: ObservableObject {
     @Published var currentModel: VNCoreMLModel?
-    @Published var modelStatus: String = "Loading..."
-    @Published var isModelAvailable: Bool = false
+    @Published var managerStatus: String = "Loading..."
+    @Published var isManagerAvailable: Bool = false
     
     private var updateHandlers: [ModelUpdateHandler] = []
     
@@ -285,8 +272,8 @@ class ModelManager: ObservableObject {
     
     func loadModel(named modelName: String) {
         guard let modelURL = Bundle.main.url(forResource: modelName, withExtension: "mlpackage") else {
-            modelStatus = "Model not found: \(modelName)"
-            isModelAvailable = false
+            managerStatus = "Model not found: \(modelName)"
+            isManagerAvailable = false
             return
         }
         
@@ -295,14 +282,14 @@ class ModelManager: ObservableObject {
             let coreMLModel = try VNCoreMLModel(for: mlModel)
             
             currentModel = coreMLModel
-            modelStatus = "Model loaded: \(modelName)"
-            isModelAvailable = true
+            managerStatus = "Model loaded: \(modelName)"
+            isManagerAvailable = true
             
             // Notify handlers
             updateHandlers.forEach { $0.modelDidUpdate(coreMLModel) }
         } catch {
-            modelStatus = "Failed to load model: \(error.localizedDescription)"
-            isModelAvailable = false
+            managerStatus = "Failed to load model: \(error.localizedDescription)"
+            isManagerAvailable = false
             
             // Notify handlers
             updateHandlers.forEach { $0.modelUpdateFailed(error) }
