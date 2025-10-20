@@ -21,34 +21,25 @@ jobs:
           xcodebuild -version || true
           xcodebuild -showsdks || true
 
-      - name: List schemes (project + workspace)
+      - name: List schemes (project only)
         run: |
           set -x
           : > build.log
           echo "== PROJECT SCHEMES ==" | tee -a build.log
           xcodebuild -list -project DentalAI.xcodeproj 2>&1 | tee -a build.log || true
-          if [ -e "DentalAI.xcworkspace" ]; then
-            echo "== WORKSPACE SCHEMES ==" | tee -a build.log
-            xcodebuild -list -workspace DentalAI.xcworkspace 2>&1 | tee -a build.log || true
-          fi
 
       - name: Detect container
         id: detect
         run: |
           set -euo pipefail
-          # prefer project first to avoid "scheme only in project" edge case
-          if xcodebuild -list -project DentalAI.xcodeproj >/dev/null 2>&1; then
-            WS="-project DentalAI.xcodeproj"
-          else
-            WS="-workspace DentalAI.xcworkspace"
-          fi
-          echo "ws=$WS" >> $GITHUB_OUTPUT
-          echo "Using fixed scheme: ${{ env.SCHEME }}" | tee -a build.log
+          echo "ws=-project DentalAI.xcodeproj" >> $GITHUB_OUTPUT
+          echo "scheme=DentalAI" >> $GITHUB_OUTPUT
+          echo "Using project: DentalAI.xcodeproj" | tee -a build.log
 
       - name: Resolve packages
         run: |
           set -o pipefail
-          xcodebuild ${{ steps.detect.outputs.ws }} \
+          xcodebuild -project DentalAI.xcodeproj \
             -scheme "${{ env.SCHEME }}" \
             -resolvePackageDependencies 2>&1 | tee -a build.log
 
@@ -58,7 +49,7 @@ jobs:
         run: |
           set -o pipefail
           : > build.log
-          xcodebuild ${{ steps.detect.outputs.ws }} \
+          xcodebuild -project DentalAI.xcodeproj \
             -scheme "${{ env.SCHEME }}" \
             -destination 'generic/platform=iOS Simulator' \
             -sdk iphonesimulator \
