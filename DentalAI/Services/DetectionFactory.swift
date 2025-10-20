@@ -35,26 +35,20 @@ class DetectionFactory {
     }
     
     // MARK: - Service with Fallback
-    static func makeWithFallback(flags: FeatureFlags = .current) -> DetectionService {
-        // Priority: ONNX -> ML -> CV (as you verified previously)
-        if flags.useONNXDetection {
-            #if canImport(ONNXRuntime) || canImport(OrtMobile)
+    static func makeWithFallback() -> DetectionService {
+        // Priority: ONNX → ML → CV
+        #if canImport(ONNXRuntime) || canImport(OrtMobile)
+        if FeatureFlags.useONNXDetection {
             let onnx = ONNXDetectionService()
-            if onnx.isModelAvailable {
-                return onnx
-            }
-            #endif
-            // No ONNX libs or not available -> fall through
+            if onnx.isModelAvailable { return onnx }
         }
+        #endif
 
-        if flags.useMLDetection {
+        if FeatureFlags.useMLDetection {
             let ml = MLDetectionService()
-            if ml.isModelAvailable {
-                return ml
-            }
+            if ml.isModelAvailable { return ml }
         }
 
-        // Fallback to CV always available path
         return CVDentitionService()
     }
     
