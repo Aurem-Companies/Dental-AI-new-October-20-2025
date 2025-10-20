@@ -78,7 +78,7 @@ struct FeatureFlags {
     
     static var hasBundledML: Bool {
         // Check for compiled CoreML models (.mlmodelc)
-        return ModelLocator.hasCompiledMLModel(named: "DentalDetectionModel")
+        return ModelLocator.hasCompiledMLModel(named: "DentalModel")
     }
     
     // MARK: - Current Configuration (with resource-based defaults)

@@ -5,13 +5,13 @@ final class MLAvailabilityTests: XCTestCase {
 
     func testCompiledModelPresent() {
         // Update name to your compiled model folder
-        let name = "DentalDetectionModel"
+        let name = "DentalModel"
         XCTAssertTrue(ModelLocator.hasCompiledMLModel(named: name),
                       "Expected compiled .mlmodelc '\(name)' to be bundled under /models or root.")
     }
 
     func testModelURLResolves() {
-        let name = "DentalDetectionModel"
+        let name = "DentalModel"
         let url = ModelLocator.bundledCompiledMLModelURL(named: name)
         XCTAssertNotNil(url, "Expected url for compiled model \(name)")
     }

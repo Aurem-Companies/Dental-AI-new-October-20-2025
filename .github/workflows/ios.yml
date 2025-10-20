@@ -46,7 +46,7 @@ jobs:
       - name: Validate Model Bundle
         run: |
           echo "🔍 Validating compiled CoreML model..."
-          MODEL_NAME="DentalDetectionModel"
+          MODEL_NAME="DentalModel"
           MODEL_PATH="DentalAI.app/models/${MODEL_NAME}.mlmodelc"
           
           if [ ! -d "$MODEL_PATH" ]; then

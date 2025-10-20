@@ -1,15 +1,16 @@
 import Foundation
-import UIKit
+#if canImport(CoreML)
 import CoreML
+#endif
 import Vision
-import CoreGraphics
+import os // for Logger interpolation
 
 // MARK: - ML Detection Service
 class MLDetectionService: DetectionService, @unchecked Sendable {
     
     // MARK: - Properties
     private var model: VNCoreMLModel?
-    private let modelName = "DentalDetectionModel"
+    private let modelName = "DentalModel"
     private let confidenceThreshold: Float = 0.5
     private let nmsThreshold: Float = 0.4
     private let modelQueue = DispatchQueue(label: "com.dentalai.ml.model", qos: .userInitiated)
@@ -144,29 +145,26 @@ class MLDetectionService: DetectionService, @unchecked Sendable {
 
 // MARK: - Availability (single source of truth)
 extension MLDetectionService {
-    enum AvailabilityStatus {
-        case available
-        case notAvailable
-    }
+    enum AvailabilityStatus { case available, notAvailable }
 
-    /// Name of the compiled CoreML model bundle (folder without extension).
-    private var compiledModelName: String { "DentalDetectionModel" }
+    /// Set this to your compiled .mlmodelc folder name.
+    private var compiledModelName: String { "DentalModel" } // <-- change if different
 
     var isModelAvailable: Bool {
-        let available = ModelLocator.hasCompiledMLModel(named: compiledModelName)
-        Log.ml.info("Checking compiled model '\(self.compiledModelName, privacy: .public)' available: \(available, privacy: .public)")
-        
-        if !available {
-            if let bundlePath = Bundle.main.bundlePath as String? {
-                Log.ml.error("Model not found. Bundle: \(bundlePath, privacy: .public)")
-            }
-        }
-        
-        return available
+        ModelLocator.hasCompiledMLModel(named: compiledModelName)
     }
 
     var modelStatus: AvailabilityStatus {
         isModelAvailable ? .available : .notAvailable
+    }
+
+    func debugLogAvailabilityOnce() {
+        // Safe even if logger is optimized out
+        Log.ml.info("Compiled model '\(self.compiledModelName, privacy: .public)' available: \(self.isModelAvailable, privacy: .public)")
+        if !isModelAvailable {
+            let bundlePath = Bundle.main.bundlePath
+            Log.ml.error("Model not found in bundle path: \(bundlePath, privacy: .public)")
+        }
     }
 }
 

@@ -4,7 +4,7 @@ set -euo pipefail
 # CI Model Validation Script
 # Fails the build if the compiled CoreML model is missing
 
-MODEL_NAME="DentalDetectionModel"   # Set correctly
+MODEL_NAME="DentalModel"   # Set correctly
 SEARCH_SUBDIR="models"             # or "" if at root
 
 echo "🔍 Checking for compiled CoreML model..."
