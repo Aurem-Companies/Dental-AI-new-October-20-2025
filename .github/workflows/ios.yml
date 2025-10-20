@@ -5,25 +5,65 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
-      - name: Show Xcode version
-        run: xcodebuild -version
-      - name: List available schemes
-        run: ./scripts/ci_list_schemes.sh
-      - name: Build
+
+      - name: Show Xcode + SDKs
         run: |
-          rm -rf ~/Library/Developer/Xcode/DerivedData
+          xcodebuild -version
+          xcodebuild -showsdks
+
+      - name: List schemes
+        run: |
+          chmod +x scripts/ci_list_schemes.sh || true
+          ./scripts/ci_list_schemes.sh || true
+
+      - name: Detect workspace/project + scheme
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
           if [ -e "DentalAI.xcworkspace" ]; then
-            xcodebuild -workspace "DentalAI.xcworkspace" \
-                       -scheme "DentalAI" \
-                       -destination 'generic/platform=iOS Simulator' \
-                       CODE_SIGNING_ALLOWED=NO \
-                       clean build
+            echo "ws=-workspace DentalAI.xcworkspace" >> $GITHUB_OUTPUT
+            scheme=$(xcodebuild -list -workspace DentalAI.xcworkspace 2>/dev/null | awk -v RS= -F'\n' '/Schemes:/{getline; print $1; exit}')
           else
-            xcodebuild -project "DentalAI.xcodeproj" \
-                       -scheme "DentalAI" \
-                       -destination 'generic/platform=iOS Simulator' \
-                       CODE_SIGNING_ALLOWED=NO \
-                       clean build
+            echo "ws=-project DentalAI.xcodeproj" >> $GITHUB_OUTPUT
+            scheme=$(xcodebuild -list -project DentalAI.xcodeproj 2>/dev/null | awk -v RS= -F'\n' '/Schemes:/{getline; print $1; exit}')
           fi
+          echo "scheme=${scheme}" >> $GITHUB_OUTPUT
+          echo "Detected scheme: ${scheme}"
+
+      - name: Resolve packages
+        run: |
+          xcodebuild ${{ steps.detect.outputs.ws }} \
+            -scheme "${{ steps.detect.outputs.scheme }}" \
+            -resolvePackageDependencies
+
+      - name: Build (Simulator, no signing)
+        env:
+          NSUnbufferedIO: "YES"
+        run: |
+          set -o pipefail
+          xcodebuild ${{ steps.detect.outputs.ws }} \
+            -scheme "${{ steps.detect.outputs.scheme }}" \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            clean build | tee build.log
+
+      - name: Show first error (if any)
+        if: failure()
+        run: |
+          echo "----- FIRST ERROR CONTEXT -----"
+          awk '/^error:|^fatal error:/ {print; exit}' build.log || true
+          echo "----- LAST 60 LINES -----"
+          tail -n 60 build.log || true
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
