@@ -37,12 +37,11 @@ class DetectionFactory {
     // MARK: - Service with Fallback
     static func makeWithFallback() -> DetectionService {
         // Priority: ONNX → ML → CV
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
+        // Simpler logic: always instantiate ONNXDetectionService and let isModelAvailable() decide
         if FeatureFlags.useONNXDetection {
             let onnx = ONNXDetectionService()
-            if onnx.isModelAvailable { return onnx }
+            if onnx.isModelAvailable() { return onnx }
         }
-        #endif
 
         if FeatureFlags.useMLDetection {
             let ml = MLDetectionService()
@@ -59,10 +58,8 @@ class DetectionFactory {
             return (service as! MLDetectionService).isModelAvailable
         case is CVDentitionService:
             return true // CV service is always available
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
         case is ONNXDetectionService:
             return true // ONNX service is always available
-        #endif
         default:
             return false
         }
@@ -76,10 +73,8 @@ class DetectionFactory {
             return "ML Detection Service - \(mlService.modelStatus)"
         case is CVDentitionService:
             return "CV Detection Service - Available"
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
         case is ONNXDetectionService:
             return "ONNX Detection Service - Available"
-        #endif
         default:
             return "Unknown Service"
         }
@@ -88,16 +83,12 @@ class DetectionFactory {
     // MARK: - Service Comparison
     static func compareServices() -> String {
         let mlService = MLDetectionService()
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
         let onnxService = ONNXDetectionService()
-        #endif
         let _ = CVDentitionService()
         
         var comparison = "Service Comparison:\n"
         comparison += "• ML Service: \(mlService.isModelAvailable ? "Available" : "Not Available")\n"
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
-        comparison += "• ONNX Service: Available\n"
-        #endif
+        comparison += "• ONNX Service: \(onnxService.isModelAvailable() ? "Available" : "Not Available")\n"
         comparison += "• CV Service: Available\n"
         comparison += "• Current Selection: \(FeatureFlags.useMLDetection ? "ML" : "CV")\n"
         comparison += "• Fallback Enabled: \(FeatureFlags.enableFallback)"
@@ -128,10 +119,8 @@ extension DetectionFactory {
         results["ML"] = testDetection(service: mlService, image: image)
         
         // Test ONNX Service
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
         let onnxService = ONNXDetectionService()
         results["ONNX"] = testDetection(service: onnxService, image: image)
-        #endif
         
         // Test CV Service
         let cvService = CVDentitionService()
@@ -171,12 +160,10 @@ extension DetectionFactory {
             print("Configuring CV Detection Service")
         }
         
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
         if service is ONNXDetectionService {
             // ONNX-specific configuration could go here
             print("Configuring ONNX Detection Service")
         }
-        #endif
     }
     
     // MARK: - Service Capabilities
@@ -189,7 +176,6 @@ extension DetectionFactory {
                 "Real-time inference",
                 "Confidence scoring"
             ]
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
         case is ONNXDetectionService:
             return [
                 "ONNX model inference",
@@ -197,7 +183,6 @@ extension DetectionFactory {
                 "Fast processing",
                 "Confidence scoring"
             ]
-        #endif
         case is CVDentitionService:
             return [
                 "Computer vision detection",
