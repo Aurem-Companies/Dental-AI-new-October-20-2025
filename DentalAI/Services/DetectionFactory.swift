@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import os
 
 // MARK: - Detection Factory
 class DetectionFactory {
@@ -36,23 +37,21 @@ class DetectionFactory {
     
     // MARK: - Service with Fallback
     static func makeWithFallback() -> DetectionService {
-        // Priority: ONNX → ML → CV
-        // Simpler logic: always instantiate ONNXDetectionService and let isModelAvailable() decide
-        if FeatureFlags.useONNXDetection {
-            let onnx = ONNXDetectionService()
-            if onnx.isModelAvailable() { return onnx }
+        let f = FeatureFlags.current
+        RuntimeChecks.validateFlags(f)
+
+        if f.useONNXDetection, ONNXDetectionService.isModelAvailable {
+            return ONNXDetectionService()
         }
 
-        if FeatureFlags.useMLDetection {
-            let flags = FeatureFlags.current
+        if f.useMLDetection {
             let ml = MLDetectionService()
-            if ml.isModelAvailable { 
-                return ml 
-            }
-            // Safety net: if flags say ML but model isn't available, log + fall through
-            Log.ml.error("MLDetection requested but model unavailable — falling back to CV.")
+            if ml.isModelAvailable { return ml }
+            Logger(subsystem: "com.yourorg.DentalAI", category: "Factory")
+                .error("ML requested but unavailable — falling back to CV.")
         }
 
+        // CV is guaranteed on
         return CVDentitionService()
     }
     

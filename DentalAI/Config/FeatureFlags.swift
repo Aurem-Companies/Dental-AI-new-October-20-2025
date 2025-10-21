@@ -13,10 +13,9 @@ struct FeatureFlags {
 extension FeatureFlags {
     static var current: FeatureFlags {
         let hasCompiledML = ModelLocator.modelExists(name: "DentalModel", ext: "mlmodelc")
-
-        let flags = FeatureFlags(
+        var flags = FeatureFlags(
             useONNXDetection: false,
-            useMLDetection: hasCompiledML,   // auto-disable if model missing
+            useMLDetection: hasCompiledML,
             useCVDetection: true,
             enableFallback: true,
             debugMode: true,
@@ -24,9 +23,10 @@ extension FeatureFlags {
             modelConfidenceThreshold: 0.30
         )
 
-        // Compile-time sanity (keeps API in sync if fields change)
+        FlagOverrides.apply(to: &flags)   // ← DEBUG-only no-op in Release
+
         _ = { (f: FeatureFlags) in
-            precondition(f.modelConfidenceThreshold >= 0 && f.modelConfidenceThreshold <= 1,
+            precondition((0.0...1.0).contains(f.modelConfidenceThreshold),
                          "FeatureFlags.modelConfidenceThreshold must be 0...1")
         }(flags)
 

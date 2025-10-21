@@ -41,6 +41,9 @@
 		A1234567890ABCDEF117 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF115 /* LaunchScreen.storyboard */; };
 		A1234567890ABCDEF119 /* CameraConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF118 /* CameraConfigurator.swift */; };
 		A1234567890ABCDEF121 /* RuntimeChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF120 /* RuntimeChecks.swift */; };
+		A1234567890ABCDEF128 /* FlagOverrides.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF123 /* FlagOverrides.swift */; };
+		A1234567890ABCDEF129 /* InferenceMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF124 /* InferenceMetrics.swift */; };
+		A1234567890ABCDEF130 /* DebugHealthCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF125 /* DebugHealthCheckView.swift */; };
 		A1234567890ABCDEF059 /* ONNXDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF060 /* ONNXDetectionService.swift */; };
 		A1234567890ABCDEF061 /* CVDentitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF062 /* CVDentitionService.swift */; };
 		A1234567890ABCDEF063 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF064 /* FeatureFlags.swift */; };
@@ -86,7 +89,11 @@
 		A1234567890ABCDEF115 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A1234567890ABCDEF116 /* Resources */ = {isa = PBXGroup; children = (A1234567890ABCDEF115 /* LaunchScreen.storyboard */,); path = Resources; sourceTree = "<group>"; };
 		A1234567890ABCDEF118 /* CameraConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraConfigurator.swift; sourceTree = "<group>"; };
-		A1234567890ABCDEF120 /* RuntimeChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeChecks.swift; sourceTree = "<group>"; };
+		A1234567890ABCDEF123 /* FlagOverrides.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlagOverrides.swift; sourceTree = "<group>"; };
+		A1234567890ABCDEF124 /* InferenceMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InferenceMetrics.swift; sourceTree = "<group>"; };
+		A1234567890ABCDEF125 /* DebugHealthCheckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugHealthCheckView.swift; sourceTree = "<group>"; };
+		A1234567890ABCDEF126 /* DetectionFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetectionFactoryTests.swift; sourceTree = "<group>"; };
+		A1234567890ABCDEF127 /* verify_artifacts.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = verify_artifacts.sh; sourceTree = "<group>"; };
 		A1234567890ABCDEF060 /* ONNXDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ONNXDetectionService.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF062 /* CVDentitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CVDentitionService.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF064 /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
@@ -155,6 +162,7 @@
 				A1234567890ABCDEF012 /* ImageAnalysisView.swift */,
 				A1234567890ABCDEF067 /* ProductComparisonView.swift */,
 				A1234567890ABCDEF075 /* AuthenticationView.swift */,
+				A1234567890ABCDEF125 /* DebugHealthCheckView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -224,6 +232,8 @@
 			children = (
 				A1234567890ABCDEF103 /* Log.swift */,
 				A1234567890ABCDEF120 /* RuntimeChecks.swift */,
+				A1234567890ABCDEF123 /* FlagOverrides.swift */,
+				A1234567890ABCDEF124 /* InferenceMetrics.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -331,6 +341,9 @@
 				A1234567890ABCDEF100 /* ModelLocator.swift in Sources */,
 				A1234567890ABCDEF102 /* Log.swift in Sources */,
 				A1234567890ABCDEF121 /* RuntimeChecks.swift in Sources */,
+				A1234567890ABCDEF128 /* FlagOverrides.swift in Sources */,
+				A1234567890ABCDEF129 /* InferenceMetrics.swift in Sources */,
+				A1234567890ABCDEF130 /* DebugHealthCheckView.swift in Sources */,
 				A1234567890ABCDEF059 /* ONNXDetectionService.swift in Sources */,
 				A1234567890ABCDEF061 /* CVDentitionService.swift in Sources */,
 				A1234567890ABCDEF063 /* FeatureFlags.swift in Sources */,
