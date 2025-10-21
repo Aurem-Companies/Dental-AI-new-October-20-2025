@@ -22,4 +22,19 @@ extension ModelLocator {
     static func hasCompiledMLModel(named name: String, subdir: String? = "models") -> Bool {
         modelExists(name: name, ext: "mlmodelc", subdir: subdir)
     }
+    
+    /// New: does *any* .mlmodelc exist in the app bundle?
+    static func anyCompiledMLExists() -> Bool {
+        if let urls = Bundle.main.urls(forResourcesWithExtension: "mlmodelc", subdirectory: nil) {
+            return !urls.isEmpty
+        }
+        // Some projects place models in nested subdirectories; fallback to file enumeration:
+        let fm = FileManager.default
+        guard let resourcePath = Bundle.main.resourcePath else { return false }
+        let enumerator = fm.enumerator(atPath: resourcePath)
+        while let item = enumerator?.nextObject() as? String {
+            if item.hasSuffix(".mlmodelc") { return true }
+        }
+        return false
+    }
 }
