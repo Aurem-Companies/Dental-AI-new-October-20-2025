@@ -37,6 +37,7 @@
 		A1234567890ABCDEF102 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF103 /* Log.swift */; };
 		A1234567890ABCDEF105 /* DataManager+AnalysisHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF106 /* DataManager+AnalysisHistory.swift */; };
 		A1234567890ABCDEF107 /* ResultExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF108 /* ResultExporter.swift */; };
+		A1234567890ABCDEF111 /* DetectionBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF112 /* DetectionBox.swift */; };
 		A1234567890ABCDEF059 /* ONNXDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF060 /* ONNXDetectionService.swift */; };
 		A1234567890ABCDEF061 /* CVDentitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF062 /* CVDentitionService.swift */; };
 		A1234567890ABCDEF063 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF064 /* FeatureFlags.swift */; };
