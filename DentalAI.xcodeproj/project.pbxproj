@@ -83,6 +83,7 @@
 		A1234567890ABCDEF058 /* MLDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLDetectionService.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF101 /* ModelLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelLocator.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF103 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
+		A1234567890ABCDEF120 /* RuntimeChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeChecks.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF106 /* DataManager+AnalysisHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataManager+AnalysisHistory.swift"; sourceTree = "<group>"; };
 		A1234567890ABCDEF108 /* ResultExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultExporter.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF112 /* DetectionBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetectionBox.swift; sourceTree = "<group>"; };
