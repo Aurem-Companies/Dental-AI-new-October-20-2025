@@ -2,7 +2,7 @@ import sys, json
 import onnx
 from onnx import numpy_helper
 
-PATH = "DentalAI/Resources/Models/dental_model.onnx"
+PATH = "../models/dental_model.onnx"
 
 def is_probably_yolo(onnx_model):
     # Heuristics that cover YOLOv5/YOLOv8-style exports and many forks:
