@@ -15,6 +15,9 @@ struct DentalAIApp: App {
                     let f = FeatureFlags.current
                     RuntimeChecks.validateFlags(f)
 
+                    // Set model style based on inspection result
+                    BackendStatus.modelStyle = "yolo"  // Based on Python inspection: is_probably_yolo = true
+
                     // Optional: log a concise feature status snapshot
                     let log = Logger(subsystem: "com.yourorg.DentalAI", category: "App")
                     log.debug("\(FeatureFlagsSummary.text(for: f))")
@@ -39,6 +42,16 @@ struct DentalAIApp: App {
                             .padding(.top, 8)
                             .transition(.opacity)
                     }
+                }
+                .overlay(alignment: .topTrailing) {
+                    HStack(spacing: 8) {
+                        Text("Backend: \(BackendStatus.lastUsed.uppercased())")
+                            .font(.caption2).padding(6).background(Color.gray.opacity(0.2)).cornerRadius(6)
+                        Text("Model: \(BackendStatus.modelStyle.uppercased())")
+                            .font(.caption2).padding(6).background(Color.gray.opacity(0.2)).cornerRadius(6)
+                    }
+                    .padding(.top, 40)
+                    .padding(.trailing, 8)
                 }
                 #endif
         }

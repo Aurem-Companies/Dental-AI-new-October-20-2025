@@ -25,6 +25,7 @@ enum DetectionFactory {
             let onnx = ONNXDetectionService()
             if _isAvailable(onnx) {
                 log.debug("Using ONNXDetectionService")
+                BackendStatus.lastUsed = "onnx"
                 return onnx
             } else {
                 log.error("ONNX requested but unavailable — will try ML/CV.")
@@ -36,6 +37,7 @@ enum DetectionFactory {
             let ml = MLDetectionService()
             if _isAvailable(ml) {
                 log.debug("Using MLDetectionService")
+                BackendStatus.lastUsed = "ml"
                 return ml
             } else {
                 log.error("ML requested but unavailable — will try CV.")
@@ -45,11 +47,13 @@ enum DetectionFactory {
         // 3) CV (guaranteed safety net)
         if f.useCVDetection {
             log.debug("Using CVDentitionService (fallback)")
+            BackendStatus.lastUsed = "cv"
             return CVDentitionService()
         }
 
         // Absolute last resort: never return a nil/invalid service
         log.fault("All detection paths disabled; forcing CVDentitionService to prevent app breakage.")
+        BackendStatus.lastUsed = "cv"
         return CVDentitionService()
     }
 
@@ -61,16 +65,24 @@ enum DetectionFactory {
             switch backend {
             case .onnx where f.useONNXDetection:
                 let svc = ONNXDetectionService()
-                if _isAvailable(svc) { return svc }
+                if _isAvailable(svc) { 
+                    BackendStatus.lastUsed = "onnx"
+                    return svc 
+                }
             case .ml where f.useMLDetection:
                 let svc = MLDetectionService()
-                if _isAvailable(svc) { return svc }
+                if _isAvailable(svc) { 
+                    BackendStatus.lastUsed = "ml"
+                    return svc 
+                }
             case .cv where f.useCVDetection:
+                BackendStatus.lastUsed = "cv"
                 return CVDentitionService()
             default:
                 continue
             }
         }
+        BackendStatus.lastUsed = "cv"
         return CVDentitionService()
     }
 }
