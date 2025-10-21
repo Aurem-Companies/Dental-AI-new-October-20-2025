@@ -307,8 +307,8 @@ struct CameraPermissionView: View {
             .foregroundColor(.blue)
         }
         .padding()
-        .onChange(of: cameraPermissionManager.permissionStatus) { status in
-            if status == .authorized {
+        .onChange(of: cameraPermissionManager.permissionStatus) { oldStatus, newStatus in
+            if newStatus == .authorized {
                 onPermissionGranted()
             }
         }
