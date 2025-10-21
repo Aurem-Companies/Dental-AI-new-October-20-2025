@@ -659,11 +659,19 @@ struct ShareButton: View {
     
     private func exportAndShare() {
         // Convert detections to DetectionBox format
+        let imageSize = CGSize(width: 1000, height: 1000) // Placeholder size
+        let bounds = CGRect(origin: .zero, size: imageSize)
+        
         let detections = result.detectedConditions.compactMap { (condition, confidence) -> DetectionBox? in
             // Create a simple bounding box for each detection
             // In a real implementation, you'd get actual bounding boxes from the detection service
-            let rect = CGRect(x: 50, y: 50, width: 100, height: 100) // Placeholder
-            return DetectionBox(rect: rect, label: condition.displayName, confidence: Float(confidence))
+            var rect = CGRect(x: 50, y: 50, width: 100, height: 100) // Placeholder
+            
+            // Clamp to image bounds; drop invalids
+            let r = rect.integral.intersection(bounds)
+            guard r.width > 0, r.height > 0, r.isFinite else { return nil }
+            
+            return DetectionBox(rect: r, label: condition.displayName, confidence: Float(confidence))
         }
         
         // Create a placeholder image (in real implementation, use the actual analyzed image)
@@ -718,5 +726,12 @@ struct ImageAnalysisView_Previews: PreviewProvider {
         )
         
         ImageAnalysisView(result: sampleResult)
+    }
+}
+
+// MARK: - CGRect Extension
+private extension CGRect {
+    var isFinite: Bool {
+        [origin.x, origin.y, size.width, size.height].allSatisfy { $0.isFinite && !$0.isNaN }
     }
 }

@@ -3,6 +3,7 @@ import Foundation
 // MARK: - Feature Flags
 struct FeatureFlags {
     
+    
     // MARK: - ML Detection
     static var useMLDetection: Bool {
         get {
@@ -93,12 +94,17 @@ struct FeatureFlags {
     
     // MARK: - Current Configuration (with resource-based defaults)
     static var current: FeatureFlags {
+        // Detect compiled CoreML at runtime
         let hasCompiledML = ModelLocator.modelExists(name: "DentalModel", ext: "mlmodelc")
         
-        // Auto-disable ML if compiled model not present
-        if !hasCompiledML {
-            useMLDetection = false
-        }
+        // Set flags based on actual resource availability
+        useONNXDetection = false
+        useMLDetection = hasCompiledML     // 👈 turn off if bundle lacks .mlmodelc
+        useCVDetection = true
+        enableFallback = true
+        debugMode = true
+        highPerformanceMode = false
+        modelConfidenceThreshold = 0.30
         
         return FeatureFlags()
     }
