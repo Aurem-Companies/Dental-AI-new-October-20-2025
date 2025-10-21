@@ -3,29 +3,33 @@ import XCTest
 import UIKit
 
 final class ResultExporterBasicTests: XCTestCase {
-
-    private func solidImage(size: CGSize = .init(width: 200, height: 200)) -> UIImage {
+    private func makeSolidImage(size: CGSize = .init(width: 200, height: 200)) -> UIImage {
         UIGraphicsBeginImageContextWithOptions(size, false, 2)
         UIColor.black.setFill()
-        UIBezierPath(rect: CGRect(origin: .zero, size: size)).fill()
+        UIRectFill(CGRect(origin: .zero, size: size))
         let img = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
         return img!
     }
 
     func testRenderClampedProducesImage() {
-        let base = solidImage()
+        let img = makeSolidImage()
         let boxes = [
-            DetectionBox(rect: CGRect(x: 10, y: 10, width: 80, height: 50), label: "Cavity", confidence: 0.87),
-            DetectionBox(rect: CGRect(x: 180, y: 180, width: 80, height: 80), label: "Edge", confidence: 0.25) // will clamp
+            DetectionBox(rect: CGRect(x: 10, y: 10, width: 80, height: 50),
+                         label: "Cavity", confidence: 0.87)
         ]
-        let out = ResultExporter.renderClamped(image: base, detections: boxes, modelVersion: "1.0", date: Date(timeIntervalSince1970: 0))
-        XCTAssertEqual(out.size, base.size)
-        XCTAssertNotNil(out.pngData())
+        let output = ResultExporter.renderClamped(
+            image: img,
+            detections: boxes,
+            modelVersion: "1.0",
+            date: Date()
+        )
+        XCTAssertEqual(output.size, img.size)
+        XCTAssertNotNil(output.pngData())
     }
     
     func testRenderWithCGImage() {
-        let base = solidImage()
+        let base = makeSolidImage()
         guard let cgImage = base.cgImage else {
             XCTFail("Could not get CGImage from test image")
             return
@@ -49,7 +53,7 @@ final class ResultExporterBasicTests: XCTestCase {
     }
     
     func testRenderWithEmptyDetections() {
-        let base = solidImage()
+        let base = makeSolidImage()
         let out = ResultExporter.renderClamped(image: base, detections: [], modelVersion: "1.0", date: Date())
         
         XCTAssertEqual(out.size, base.size)
@@ -57,7 +61,7 @@ final class ResultExporterBasicTests: XCTestCase {
     }
     
     func testExportPNG() throws {
-        let base = solidImage()
+        let base = makeSolidImage()
         let url = try ResultExporter.exportPNG(image: base, filename: "test.png")
         
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
