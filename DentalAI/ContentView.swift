@@ -11,6 +11,10 @@ struct ContentView: View {
     @State private var showingImageAnalysis = false
     @State private var showingAbout = false
     
+    #if DEBUG
+    @State private var showMLMisconfigBanner = false
+    #endif
+    
     // MARK: - Body
     var body: some View {
         Group {
@@ -30,7 +34,20 @@ struct ContentView: View {
     
     // MARK: - Main App View
     private var mainAppView: some View {
-        TabView(selection: $selectedTab) {
+        VStack(spacing: 0) {
+            #if DEBUG
+            if showMLMisconfigBanner {
+                Text("⚠️ ML enabled but DentalModel.mlmodelc not bundled — falling back to CV")
+                    .font(.footnote)
+                    .padding(8)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.yellow.opacity(0.2))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
+            }
+            #endif
+            
+            TabView(selection: $selectedTab) {
             // Home Tab
             ModernHomeView(
                 detectionViewModel: detectionViewModel,
@@ -67,6 +84,16 @@ struct ContentView: View {
                 .tag(2)
         }
         .accentColor(.blue)
+        }
+        .onAppear {
+            let f = FeatureFlags.current
+            RuntimeChecks.validateFlags(f)
+            #if DEBUG
+            if f.useMLDetection && !ModelLocator.modelExists(name: "DentalModel", ext: "mlmodelc") {
+                showMLMisconfigBanner = true
+            }
+            #endif
+        }
         .sheet(isPresented: $showingImageAnalysis) {
             if let result = detectionViewModel.lastAnalysisResult {
                 ImageAnalysisView(result: result)

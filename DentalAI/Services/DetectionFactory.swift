@@ -44,8 +44,13 @@ class DetectionFactory {
         }
 
         if FeatureFlags.useMLDetection {
+            let flags = FeatureFlags.current
             let ml = MLDetectionService()
-            if ml.isModelAvailable { return ml }
+            if ml.isModelAvailable { 
+                return ml 
+            }
+            // Safety net: if flags say ML but model isn't available, log + fall through
+            Log.ml.error("MLDetection requested but model unavailable — falling back to CV.")
         }
 
         return CVDentitionService()
