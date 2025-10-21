@@ -16,7 +16,7 @@ extension FeatureFlags {
 
         var flags = FeatureFlags(
             useONNXDetection: false,
-            useMLDetection: hasCompiledML,   // auto-enable only if a .mlmodelc is truly bundled
+            useMLDetection: hasCompiledML,   // default truth-based
             useCVDetection: true,
             enableFallback: true,
             debugMode: true,
@@ -24,8 +24,13 @@ extension FeatureFlags {
             modelConfidenceThreshold: 0.30
         )
 
-        // Optional DEBUG overrides: if you implemented FlagOverrides.apply
-        FlagOverrides.apply(to: &flags)
+        // Optional DEBUG overrides (no-op in Release). Safe to omit if you don't have it.
+        // FlagOverrides.apply(to: &flags)
+
+        // FINAL CLAMP: never allow ML on when no compiled model is present
+        if flags.useMLDetection && !hasCompiledML {
+            flags.useMLDetection = false
+        }
 
         precondition((0.0...1.0).contains(flags.modelConfidenceThreshold),
                      "FeatureFlags.modelConfidenceThreshold must be 0...1")

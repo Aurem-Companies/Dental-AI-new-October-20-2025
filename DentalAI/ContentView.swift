@@ -37,7 +37,7 @@ struct ContentView: View {
         VStack(spacing: 0) {
             #if DEBUG
             if showMLMisconfigBanner {
-                Text("⚠️ ML enabled but DentalModel.mlmodelc not bundled — falling back to CV")
+                Text("⚠️ ML enabled but no .mlmodelc found in bundle — falling back to CV")
                     .font(.footnote)
                     .padding(8)
                     .frame(maxWidth: .infinity)
@@ -89,7 +89,7 @@ struct ContentView: View {
             let f = FeatureFlags.current
             RuntimeChecks.validateFlags(f)
             #if DEBUG
-            if f.useMLDetection && !ModelLocator.modelExists(name: "DentalModel", ext: "mlmodelc") {
+            if f.useMLDetection && !ModelLocator.anyCompiledMLExists() {
                 showMLMisconfigBanner = true
             }
             #endif
