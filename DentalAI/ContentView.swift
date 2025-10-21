@@ -34,20 +34,21 @@ struct ContentView: View {
     
     // MARK: - Main App View
     private var mainAppView: some View {
-        VStack(spacing: 0) {
-            #if DEBUG
-            if showMLMisconfigBanner {
-                Text("⚠️ ML enabled but no .mlmodelc found in bundle — falling back to CV")
-                    .font(.footnote)
-                    .padding(8)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.yellow.opacity(0.2))
-                    .cornerRadius(8)
-                    .padding(.horizontal)
-            }
-            #endif
-            
-            TabView(selection: $selectedTab) {
+        NavigationView {
+            VStack(spacing: 0) {
+                #if DEBUG
+                if showMLMisconfigBanner {
+                    Text("⚠️ ML enabled but no .mlmodelc found in bundle — falling back to CV")
+                        .font(.footnote)
+                        .padding(8)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.yellow.opacity(0.2))
+                        .cornerRadius(8)
+                        .padding(.horizontal)
+                }
+                #endif
+                
+                TabView(selection: $selectedTab) {
             // Home Tab
             ModernHomeView(
                 detectionViewModel: detectionViewModel,
@@ -84,6 +85,22 @@ struct ContentView: View {
                 .tag(2)
         }
         .accentColor(.blue)
+        }
+        #if DEBUG
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Run Self-Test") {
+                    let result = SmokeTest.run()
+                    switch result {
+                    case .success(let count, let avg, let backend):
+                        print("✅ SmokeTest OK — \(count) detections, avg=\(String(format: "%.2f", avg)), backend=\(backend.uppercased())")
+                    case .failure(let msg):
+                        print("❌ SmokeTest FAILED — \(msg)")
+                    }
+                }
+            }
+        }
+        #endif
         }
         .onAppear {
             let f = FeatureFlags.current
