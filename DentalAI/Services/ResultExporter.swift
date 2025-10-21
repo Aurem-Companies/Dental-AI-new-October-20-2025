@@ -1,9 +1,6 @@
 import Foundation
 import UIKit
 
-// Data model already exists elsewhere:
-// struct DetectionBox { let rect: CGRect; let label: String; let confidence: Float }
-
 struct ResultExporter {
 
     enum ExportError: Error {
