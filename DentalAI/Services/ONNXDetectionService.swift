@@ -16,7 +16,7 @@ private let DEBUG_ENABLE_YOLO_POSTPROC = false
 
 // Do NOT wrap the type declaration in #if. The class must always exist so callers compile.
 final class ONNXDetectionService: DetectionService {
-
+    
     // MARK: - Properties
     #if canImport(ONNXRuntime) || canImport(OrtMobile)
     private var session: Any? // Will be ORTSession or similar
@@ -28,7 +28,17 @@ final class ONNXDetectionService: DetectionService {
     init() {
         #if canImport(ONNXRuntime) || canImport(OrtMobile)
         // TODO: Initialize ONNX session here
-        // For now, session remains nil until runtime is properly integrated
+        // Example with ORT:
+        // do {
+        //     let modelURL = Bundle.main.url(forResource: "dental_model", withExtension: "onnx")!
+        //     session = try ORTSession(env: ORTEnv(), modelPath: modelURL.path)
+        // } catch {
+        //     print("Failed to initialize ONNX session: \(error)")
+        //     session = nil
+        // }
+        
+        // For now, simulate session availability for testing
+        session = "mock_session" // Placeholder - replace with real ORTSession
         #endif
     }
 
@@ -48,7 +58,7 @@ final class ONNXDetectionService: DetectionService {
 
         return hasModel && hasRuntime
     }
-
+    
     // MARK: - Detection
     func detect(in image: CGImage) throws -> [Detection] {
         // If runtime isn't present, be a safe no-op.
@@ -61,8 +71,16 @@ final class ONNXDetectionService: DetectionService {
         }
         
         // TODO: Implement real ONNX inference here
+        // Example with ORT:
+        // let inputTensor = try ORTValue(tensorData: NSMutableData(data: inputData), 
+        //                               elementType: .float, shape: [1, 3, 640, 640])
+        // let outputs = try session.run(withInputs: [inputName: inputTensor], 
+        //                               outputNames: [outputName])
+        // let out = outputs[outputName]!
+        // let rawArray: [Float] = out.toArray(Float.self)
+        
         // For now, simulate the expected output shape [1, 84, 3549]
-        // This will be replaced with actual ONNX runtime calls
+        // This will be replaced with actual ONNX runtime calls above
         
         // Simulate real YOLO outputs with correct shape [1, 84, 3549]
         // Shape: [batch=1, features=84, detections=3549]
@@ -165,11 +183,20 @@ final class ONNXDetectionService: DetectionService {
             )
             let kept = YOLOPost.postprocess(cands: cands, params: params)
 
-            // 4) Map to your DetectionResult & (optionally) scale to display coordinates
-            // If cx,cy,w,h are normalized (0..1), scale by your model/input size or the displayed image size.
+            // 4) Map to Detection format with proper coordinate scaling
+            // Scale normalized coordinates (0-1) to image pixel dimensions
+            let imageWidth = Float(image.width)
+            let imageHeight = Float(image.height)
+            
             let processed: [Detection] = kept.map { cand in
-                let rect = YOLOPost.toCGRect(cx: cand.cx, cy: cand.cy, w: cand.w, h: cand.h)
-                let label = "cls_\(cand.classIndex)" // replace with label map if you have one
+                // Scale normalized coordinates to image dimensions
+                let scaledCx = cand.cx * imageWidth
+                let scaledCy = cand.cy * imageHeight
+                let scaledW = cand.w * imageWidth
+                let scaledH = cand.h * imageHeight
+                
+                let rect = YOLOPost.toCGRect(cx: scaledCx, cy: scaledCy, w: scaledW, h: scaledH)
+                let label = DentalLabels.label(for: cand.classIndex)
                 return Detection(label: label, confidence: Double(cand.conf), rect: rect)
             }
 
