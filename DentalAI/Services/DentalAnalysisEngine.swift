@@ -124,36 +124,51 @@ class DentalAnalysisEngine {
     private func detectDentalConditions(_ image: UIImage) async throws -> [DentalCondition: Double] {
         var detectedConditions: [DentalCondition: Double] = [:]
         
-        // Use ML detection if available, otherwise fall back to rule-based detection
-        if FeatureFlags.useMLDetection {
-            do {
-                detectedConditions = try await detectConditionsByML(image)
-            } catch {
-                print("ML detection failed, falling back to rule-based detection: \(error)")
-                if FeatureFlags.enableFallback {
-                    detectedConditions = try await detectConditionsByRules(image)
-                } else {
-                    throw error
-                }
+        // Pull effective flags and choose detection backend(s)
+        let flags = FeatureFlags.current
+        RuntimeChecks.validateFlags(flags)
+
+        // Build preferred order from flags (ONNX → ML → CV when enabled)
+        var preferred: [DetectionBackend] = []
+        if flags.useONNXDetection { preferred.append(.onnx) }
+        if flags.useMLDetection { preferred.append(.ml) }
+
+        // CV is the safety net; include it if explicitly enabled OR if fallback is enabled
+        if flags.useCVDetection || flags.enableFallback {
+            preferred.append(.cv)
+        }
+
+        // Absolute guard: never run without any backend listed
+        if preferred.isEmpty { preferred = [.cv] }
+
+        // Create service
+        let detector = DetectionFactory.make(preferred: preferred)
+        
+        // Use the detection service
+        do {
+            detectedConditions = try await detectConditionsByML(image, detector: detector)
+        } catch {
+            print("Detection failed, falling back to rule-based detection: \(error)")
+            if flags.enableFallback {
+                detectedConditions = try await detectConditionsByRules(image)
+            } else {
+                throw error
             }
-        } else {
-            detectedConditions = try await detectConditionsByRules(image)
         }
         
         return detectedConditions
     }
     
     // MARK: - ML-Based Detection
-    private func detectConditionsByML(_ image: UIImage) async throws -> [DentalCondition: Double] {
+    private func detectConditionsByML(_ image: UIImage, detector: DetectionService) async throws -> [DentalCondition: Double] {
         // This would integrate with the actual ML model
         // For now, we'll simulate ML detection
         
-        let detectionService = DetectionFactory.make()
         guard let cgImage = image.cgImage else {
             throw AnalysisError.invalidImage
         }
         
-        let detections = try detectionService.detect(in: cgImage)
+        let detections = try detector.detect(in: cgImage)
         
         var conditions: [DentalCondition: Double] = [:]
         
