@@ -2,12 +2,7 @@ import Foundation
 import CoreGraphics
 import CoreVideo
 import UIKit
-
-#if canImport(ONNXRuntime)
 import ONNXRuntime
-#elseif canImport(OrtMobile)
-import OrtMobile
-#endif
 
 #if DEBUG
 /// DEBUG-only: Leave false to keep behavior identical. Flip true after clean build to test YOLO postproc.
@@ -18,197 +13,156 @@ private let DEBUG_ENABLE_YOLO_POSTPROC = false
 final class ONNXDetectionService: DetectionService {
     
     // MARK: - Properties
-    #if canImport(ONNXRuntime) || canImport(OrtMobile)
-    private var session: Any? // Will be ORTSession or similar
+    private let env = try? ORTEnv(loggingLevel: ORTLoggingLevel.warning)
+    private var session: ORTSession?
     private let inputName = "images"
     private let outputName = "output0"
-    #endif
 
     // MARK: - Init
     init() {
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
-        // TODO: Initialize ONNX session here
-        // Example with ORT:
-        // do {
-        //     let modelURL = Bundle.main.url(forResource: "dental_model", withExtension: "onnx")!
-        //     session = try ORTSession(env: ORTEnv(), modelPath: modelURL.path)
-        // } catch {
-        //     print("Failed to initialize ONNX session: \(error)")
-        //     session = nil
-        // }
-        
-        // For now, simulate session availability for testing
-        session = "mock_session" // Placeholder - replace with real ORTSession
-        #endif
+        // Initialize ONNX session once
+        if let env = env,
+           let url = Bundle.main.url(forResource: "dental_model", withExtension: "onnx") {
+            do {
+                session = try ORTSession(env: env, modelPath: url.path)
+            } catch {
+                print("❌ ONNX session init failed: \(error)")
+                session = nil
+            }
+        } else {
+            print("❌ ONNX env or model URL missing")
+            session = nil
+        }
     }
 
     // MARK: - Availability
     /// Returns true when an ONNX model is bundle-present AND the runtime is linkable.
     func isModelAvailable() -> Bool {
-        // Prefer this simple check to keep callers honest:
         // 1) Model file present?
-        let hasModel = ModelLocator.modelExists(name: "dental_model", ext: "onnx") // adjust name if needed
-
-        // 2) Runtime actually importable?
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
-        let hasRuntime = true
-        #else
-        let hasRuntime = false
-        #endif
-
-        return hasModel && hasRuntime
+        let hasModel = ModelLocator.modelExists(name: "dental_model", ext: "onnx")
+        
+        // 2) Session initialized successfully?
+        let hasSession = session != nil
+        
+        return hasModel && hasSession
     }
     
     // MARK: - Detection
     func detect(in image: CGImage) throws -> [Detection] {
-        // If runtime isn't present, be a safe no-op.
-        #if canImport(ONNXRuntime) || canImport(OrtMobile)
-        
-        // Check if session is available
-        guard session != nil else {
-            // Session not initialized - return empty for now
+        // Convert CGImage → UIImage for preprocessing
+        let img = UIImage(cgImage: image)
+
+        // Preprocess
+        guard let (inputData, shape) = ImagePreprocessor.makeNCHWInput(from: img, size: 640) else {
             return []
         }
-        
-        // TODO: Implement real ONNX inference here
-        // Example with ORT:
-        // let inputTensor = try ORTValue(tensorData: NSMutableData(data: inputData), 
-        //                               elementType: .float, shape: [1, 3, 640, 640])
-        // let outputs = try session.run(withInputs: [inputName: inputTensor], 
-        //                               outputNames: [outputName])
-        // let out = outputs[outputName]!
-        // let rawArray: [Float] = out.toArray(Float.self)
-        
-        // For now, simulate the expected output shape [1, 84, 3549]
-        // This will be replaced with actual ONNX runtime calls above
-        
-        // Simulate real YOLO outputs with correct shape [1, 84, 3549]
-        // Shape: [batch=1, features=84, detections=3549]
-        let batchSize = 1
-        let featureCount = 84  // cx, cy, w, h, obj + 79 class scores
-        let detectionCount = 3549
-        
-        var rawArray: [Float] = []
-        rawArray.reserveCapacity(batchSize * featureCount * detectionCount)
-        
-        // Generate realistic YOLO outputs
-        for d in 0..<detectionCount {
-            // cx, cy, w, h (normalized coordinates 0-1)
-            let cx = Float.random(in: 0.0...1.0)
-            let cy = Float.random(in: 0.0...1.0)
-            let w = Float.random(in: 0.01...0.3)
-            let h = Float.random(in: 0.01...0.3)
-            
-            // objectness logit (before sigmoid)
-            let obj = Float.random(in: -3...3)
-            
-            // class logits (before sigmoid) - 79 classes
-            var classLogits: [Float] = []
-            classLogits.reserveCapacity(79)
-            for _ in 0..<79 {
-                classLogits.append(Float.random(in: -3...3))
-            }
-            
-            // Add to raw array in [D, F] format (detection, feature)
-            rawArray.append(cx)
-            rawArray.append(cy)
-            rawArray.append(w)
-            rawArray.append(h)
-            rawArray.append(obj)
-            rawArray.append(contentsOf: classLogits)
+
+        guard let session = session else {
+            // Session not ready: safe fallback
+            return []
         }
-        
-        #if DEBUG
-        if DEBUG_ENABLE_YOLO_POSTPROC {
-            // 1) Run the real ONNX inference (adapt to your runtime API)
-            // Example with ORT-style API; replace with your actual calls:
-            // let outputs = try session.run(withInputs: [inputName: inputTensor], outputNames: [outputName])
-            // let out = outputs[outputName]!
-            // let outShape = out.shape // e.g., [1, N, D] or [1, D, N]
-            // let rawArray: [Float] = out.toArray(Float.self)
 
-            // --- BEGIN: SHAPE NORMALIZATION ---
-            // You reported shape [1, 84, 3549]. We must normalize to [1, N, D] (N=detections, D=features).
-            // If your tensor is [1, N, D] already:
-            var N = detectionCount  // 3549 detections
-            var D = featureCount    // 84 features per detection
-            var rawArrayND: [Float] = rawArray
+        do {
+            // Create tensor
+            let inputTensor = try ORTValue(tensorData: NSMutableData(data: inputData),
+                                           elementType: ORTTensorElementDataType.float,
+                                           shape: shape)
 
-            // If your tensor is [1, D, N], transpose it into [1, N, D].
-            // Our simulated data is already in [D, N] format, so we need to transpose to [N, D]
-            if true { // Always transpose since we're simulating [1, 84, 3549] → [1, 3549, 84]
-                // Transpose from [D, N] to [N, D]
-                let oldN = detectionCount, oldD = featureCount
+            // Run
+            let outputs = try session.run(
+                withInputs: [inputName: inputTensor],
+                outputNames: [outputName],
+                runOptions: nil
+            )
+
+            guard let out = outputs[outputName] else { return [] }
+
+            // Extract raw floats and shape (e.g., [1, 84, 3549])
+            let raw: [Float] = try out.tensorData().toArray(type: Float.self)
+            let outShape = try out.tensorData().shape() as? [NSNumber] ?? [1, 84, 3549]
+
+            // Normalize shape to [1, N, D]
+            var N = Int(truncating: outShape.count > 2 ? outShape[2] : 0) // detections
+            var D = Int(truncating: outShape.count > 1 ? outShape[1] : 0) // features per detection (84)
+
+            var rawND = raw
+            // If shape is [1, D, N], transpose to [N, D]
+            if outShape.count == 3, D > N {
+                let oldN = N, oldD = D
                 var transposed = [Float](repeating: 0, count: oldN * oldD)
                 for d in 0..<oldD {
                     for n in 0..<oldN {
-                        transposed[n * oldD + d] = rawArray[d * oldN + n]
+                        transposed[n * oldD + d] = raw[d * oldN + n]
                     }
                 }
-                rawArrayND = transposed
-                N = oldN  // 3549
-                D = oldD  // 84
+                rawND = transposed
+                N = oldN
+                D = oldD
+            } else if outShape.count == 3, N == 0 || D == 0 {
+                // Fallback if shape parsing fails; assume known values
+                N = 3549; D = 84
             }
-            // --- END: SHAPE NORMALIZATION ---
 
-            // 2) Build YOLO candidates (expects per det: [cx,cy,w,h,obj, classLogits...])
-            // If your model outputs normalized coords (0..1), you can scale later to image size.
-            var cands: [YOLOCandidate] = []
-            cands.reserveCapacity(N)
-            for i in 0..<N {
-                let base = i * D
-                if base + 5 > rawArrayND.count { break }
+            // DEBUG-only post-processing path (opt-in)
+            #if DEBUG
+            if DEBUG_ENABLE_YOLO_POSTPROC {
+                var cands: [YOLOCandidate] = []
+                cands.reserveCapacity(N)
+                for i in 0..<N {
+                    let base = i * D
+                    if base + 5 > rawND.count { break }
 
-                let cx  = rawArrayND[base + 0]
-                let cy  = rawArrayND[base + 1]
-                let w   = rawArrayND[base + 2]
-                let h   = rawArrayND[base + 3]
-                let obj = YOLOPost.sig(rawArrayND[base + 4])
+                    // Model outputs cx,cy,w,h normalized 0..1 (your analysis confirmed)
+                    let cx  = rawND[base + 0]
+                    let cy  = rawND[base + 1]
+                    let w   = rawND[base + 2]
+                    let h   = rawND[base + 3]
+                    let obj = YOLOPost.sig(rawND[base + 4])
 
-                var scores: [Float] = []
-                scores.reserveCapacity(max(0, D - 5))
-                var j = base + 5
-                while j < base + D {
-                    scores.append(YOLOPost.sig(rawArrayND[j]))
-                    j += 1
+                    var scores: [Float] = []
+                    scores.reserveCapacity(max(0, D - 5))
+                    var j = base + 5
+                    while j < base + D {
+                        scores.append(YOLOPost.sig(rawND[j]))
+                        j += 1
+                    }
+                    cands.append(YOLOCandidate(cx: cx, cy: cy, w: w, h: h, obj: obj, scores: scores))
                 }
-                cands.append(YOLOCandidate(cx: cx, cy: cy, w: w, h: h, obj: obj, scores: scores))
+
+                // Thresholds (minConfidence from FeatureFlags)
+                let params = DetectionParams(
+                    minConfidence: Float(FeatureFlags.current.modelConfidenceThreshold),
+                    nmsIoU: 0.45,
+                    maxDetections: 100
+                )
+
+                // Post-process
+                let kept = YOLOPost.postprocess(cands: cands, params: params)
+
+                // Scale normalized coords to image pixels
+                let iw = Float(image.width)
+                let ih = Float(image.height)
+                let results: [Detection] = kept.map { cand in
+                    let rect = YOLOPost.toCGRect(
+                        cx: cand.cx * iw, cy: cand.cy * ih,
+                        w:  cand.w * iw,  h:  cand.h * ih
+                    )
+                    let name = DentalLabels.label(for: cand.classIndex)
+                    return Detection(label: name,
+                                     confidence: Float(cand.conf),
+                                     boundingBox: rect)
+                }
+                return results
             }
+            #endif
 
-            // 3) Post-process with thresholds (confidence from FeatureFlags)
-            let params = DetectionParams(
-                minConfidence: Float(FeatureFlags.current.modelConfidenceThreshold),
-                nmsIoU: 0.45,
-                maxDetections: 100
-            )
-            let kept = YOLOPost.postprocess(cands: cands, params: params)
-
-            // 4) Map to Detection format with proper coordinate scaling
-            // Scale normalized coordinates (0-1) to image pixel dimensions
-            let imageWidth = Float(image.width)
-            let imageHeight = Float(image.height)
-            
-            let processed: [Detection] = kept.map { cand in
-                // Scale normalized coordinates to image dimensions
-                let scaledCx = cand.cx * imageWidth
-                let scaledCy = cand.cy * imageHeight
-                let scaledW = cand.w * imageWidth
-                let scaledH = cand.h * imageHeight
-                
-                let rect = YOLOPost.toCGRect(cx: scaledCx, cy: scaledCy, w: scaledW, h: scaledH)
-                let label = DentalLabels.label(for: cand.classIndex)
-                return Detection(label: label, confidence: Double(cand.conf), rect: rect)
-            }
-
-            return processed
+            // If DEBUG toggle is OFF, you can either:
+            // (a) Return an empty array (keeps prod behavior unchanged), or
+            // (b) Return a basic parse of rawND without NMS (simple fallback).
+            return []
+        } catch {
+            print("❌ ONNX inference error: \(error)")
+            return []
         }
-        #endif
-
-        // Fallback to existing behavior (unchanged)
-        return []
-        
-        #else
-        return []
-        #endif
     }
 }

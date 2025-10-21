@@ -6,7 +6,16 @@
 	objectVersion = 56;
 	objects = {
 
-/* Begin PBXBuildFile section */
+/* Begin XCRemoteSwiftPackageReference section */
+		A1234567890ABCDEF200 /* XCRemoteSwiftPackageReference "onnxruntime-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/microsoft/onnxruntime-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 		A1234567890ABCDEF001 /* DentalAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF002 /* DentalAIApp.swift */; };
 		A1234567890ABCDEF003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF004 /* ContentView.swift */; };
 		A1234567890ABCDEF005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF006 /* Assets.xcassets */; };
@@ -44,7 +53,8 @@
 		A1234567890ABCDEF129 /* InferenceMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF124 /* InferenceMetrics.swift */; };
 		A1234567890ABCDEF133 /* FeatureFlagsSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF131 /* FeatureFlagsSummary.swift */; };
 		A1234567890ABCDEF141 /* DetectionParams.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF139 /* DetectionParams.swift */; };
-		A1234567890ABCDEF146 /* DentalLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF145 /* DentalLabels.swift */; };
+		A1234567890ABCDEF149 /* ImagePreprocessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF147 /* ImagePreprocessor.swift */; };
+		A1234567890ABCDEF150 /* UIImage+PixelBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF148 /* UIImage+PixelBuffer.swift */; };
 		A1234567890ABCDEF059 /* ONNXDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF060 /* ONNXDetectionService.swift */; };
 		A1234567890ABCDEF061 /* CVDentitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF062 /* CVDentitionService.swift */; };
 		A1234567890ABCDEF063 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF064 /* FeatureFlags.swift */; };
@@ -86,7 +96,8 @@
 		A1234567890ABCDEF103 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF131 /* FeatureFlagsSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FeatureFlagsSummary.swift"; sourceTree = "<group>"; };
 		A1234567890ABCDEF139 /* DetectionParams.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DetectionParams.swift"; sourceTree = "<group>"; };
-		A1234567890ABCDEF145 /* DentalLabels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DentalLabels.swift"; sourceTree = "<group>"; };
+		A1234567890ABCDEF147 /* ImagePreprocessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ImagePreprocessor.swift"; sourceTree = "<group>"; };
+		A1234567890ABCDEF148 /* UIImage+PixelBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIImage+PixelBuffer.swift"; sourceTree = "<group>"; };
 		A1234567890ABCDEF106 /* DataManager+AnalysisHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataManager+AnalysisHistory.swift"; sourceTree = "<group>"; };
 		A1234567890ABCDEF108 /* ResultExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultExporter.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF112 /* DetectionBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetectionBox.swift; sourceTree = "<group>"; };
@@ -243,6 +254,8 @@
 				A1234567890ABCDEF139 /* DetectionParams.swift */,
 				A1234567890ABCDEF140 /* YOLOPost.swift */,
 				A1234567890ABCDEF145 /* DentalLabels.swift */,
+				A1234567890ABCDEF147 /* ImagePreprocessor.swift */,
+				A1234567890ABCDEF148 /* UIImage+PixelBuffer.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -270,6 +283,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				A1234567890ABCDEF201 /* XCSwiftPackageProductDependency "ONNXRuntime" */,
 			);
 			name = DentalAI;
 			productName = DentalAI;
@@ -277,6 +291,14 @@
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1234567890ABCDEF201 /* XCSwiftPackageProductDependency "ONNXRuntime" */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1234567890ABCDEF200 /* XCRemoteSwiftPackageReference "onnxruntime-swift" */;
+			productName = ONNXRuntime;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin PBXProject section */
 		A1234567890ABCDEF034 /* Project object */ = {
@@ -300,6 +322,9 @@
 				Base,
 			);
 			mainGroup = A1234567890ABCDEF023;
+			packageReferences = (
+				A1234567890ABCDEF200 /* XCRemoteSwiftPackageReference "onnxruntime-swift" */,
+			);
 			productRefGroup = A1234567890ABCDEF025 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -367,6 +392,8 @@
 				A1234567890ABCDEF141 /* DetectionParams.swift in Sources */,
 				A1234567890ABCDEF142 /* YOLOPost.swift in Sources */,
 				A1234567890ABCDEF146 /* DentalLabels.swift in Sources */,
+				A1234567890ABCDEF149 /* ImagePreprocessor.swift in Sources */,
+				A1234567890ABCDEF150 /* UIImage+PixelBuffer.swift in Sources */,
 				A1234567890ABCDEF134 /* RuntimeChecks.swift in Sources */,
 				A1234567890ABCDEF135 /* BackendStatus.swift in Sources */,
 				A1234567890ABCDEF059 /* ONNXDetectionService.swift in Sources */,
