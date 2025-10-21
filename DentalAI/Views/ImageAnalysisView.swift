@@ -665,7 +665,7 @@ struct ShareButton: View {
         let detections = result.detectedConditions.compactMap { (condition, confidence) -> DetectionBox? in
             // Create a simple bounding box for each detection
             // In a real implementation, you'd get actual bounding boxes from the detection service
-            var rect = CGRect(x: 50, y: 50, width: 100, height: 100) // Placeholder
+            let rect = CGRect(x: 50, y: 50, width: 100, height: 100) // Placeholder
             
             // Clamp to image bounds; drop invalids
             let r = rect.integral.intersection(bounds)
