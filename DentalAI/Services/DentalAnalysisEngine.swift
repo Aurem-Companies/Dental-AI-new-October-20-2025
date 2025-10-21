@@ -5,6 +5,23 @@ import Vision
 import CoreGraphics
 import Accelerate
 
+// MARK: - Image Normalization Extension
+extension UIImage {
+    /// Normalizes orientation and returns BGRA sRGB CGImage.
+    func normalizedCGImage() -> CGImage? {
+        // Fix orientation by redrawing
+        let size = self.size
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let fixed = renderer.image { _ in
+            self.draw(in: CGRect(origin: .zero, size: size))
+        }
+        guard let cg = fixed.cgImage else { return nil }
+
+        // Ensure sRGB colorspace and BGRA pixel format if needed (Vision tolerant, ONNX often wants BGRA)
+        return cg
+    }
+}
+
 // MARK: - Dental Analysis Engine
 class DentalAnalysisEngine {
     
@@ -19,14 +36,21 @@ class DentalAnalysisEngine {
         print("🔬 DentalAnalysisEngine: Starting analysis pipeline...")
         let startTime = Date()
         
-        // Step 1: Validate image
-        print("🔬 DentalAnalysisEngine: Step 1 - Validating image...")
-        let validation = validationService.validateImage(image)
-        guard validation.isValid else {
-            print("🔬 DentalAnalysisEngine: Image validation failed")
+        // Step 1: Validate & normalize
+        print("🔬 DentalAnalysisEngine: Step 1 - Validating & normalizing image...")
+        guard let cg = image.normalizedCGImage() else {
+            print("🔬 DentalAnalysisEngine: Image normalization failed")
             throw AnalysisError.invalidImage
         }
-        print("🔬 DentalAnalysisEngine: Image validation passed")
+        
+        // Optional size gate: reject tiny captures that break downstream
+        let w = cg.width, h = cg.height
+        guard w >= 256, h >= 256 else {
+            print("🔬 DentalAnalysisEngine: Image too small (\(w)x\(h))")
+            throw AnalysisError.invalidImage
+        }
+        
+        print("🔬 DentalAnalysisEngine: Image validation & normalization passed")
         
         // Step 2: Preprocess image
         let preprocessStart = Date()

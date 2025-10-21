@@ -23,7 +23,7 @@ struct ContentView: View {
         .onAppear {
             print("🔍 ContentView appeared - isAuthenticated: \(authViewModel.isAuthenticated)")
         }
-        .onChange(of: authViewModel.isAuthenticated) { isAuthenticated in
+        .onChange(of: authViewModel.isAuthenticated) { _, isAuthenticated in
             print("🔄 Authentication state changed: \(isAuthenticated)")
         }
     }
@@ -90,7 +90,7 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
             }
         }
-        .onChange(of: showingImageAnalysis) { isShowing in
+        .onChange(of: showingImageAnalysis) { _, isShowing in
             print("🔬 ContentView: showingImageAnalysis changed to: \(isShowing)")
             if isShowing {
                 if let result = detectionViewModel.lastAnalysisResult {
@@ -100,7 +100,7 @@ struct ContentView: View {
                 }
             }
         }
-        .onChange(of: detectionViewModel.lastAnalysisResult) { result in
+        .onChange(of: detectionViewModel.lastAnalysisResult) { _, result in
             print("🔬 ContentView: lastAnalysisResult changed - has result: \(result != nil)")
             if let result = result {
                 print("🔬 ContentView: New result - Health Score: \(result.healthScore), Conditions: \(result.detectedConditions.count)")
@@ -187,7 +187,7 @@ struct HomeView: View {
                 .background(Color.yellow)
             }
         }
-        .onChange(of: showingCropView) { isShowing in
+        .onChange(of: showingCropView) { _, isShowing in
             print("🔄 HomeView: showingCropView changed to: \(isShowing)")
             if isShowing {
                 print("🔄 HomeView: capturedImage is nil: \(capturedImage == nil)")

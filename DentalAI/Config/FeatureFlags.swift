@@ -93,6 +93,13 @@ struct FeatureFlags {
     
     // MARK: - Current Configuration (with resource-based defaults)
     static var current: FeatureFlags {
+        let hasCompiledML = ModelLocator.modelExists(name: "DentalModel", ext: "mlmodelc")
+        
+        // Auto-disable ML if compiled model not present
+        if !hasCompiledML {
+            useMLDetection = false
+        }
+        
         return FeatureFlags()
     }
     

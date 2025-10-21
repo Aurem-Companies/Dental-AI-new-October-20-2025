@@ -38,6 +38,8 @@
 		A1234567890ABCDEF105 /* DataManager+AnalysisHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF106 /* DataManager+AnalysisHistory.swift */; };
 		A1234567890ABCDEF107 /* ResultExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF108 /* ResultExporter.swift */; };
 		A1234567890ABCDEF111 /* DetectionBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF112 /* DetectionBox.swift */; };
+		A1234567890ABCDEF117 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF115 /* LaunchScreen.storyboard */; };
+		A1234567890ABCDEF119 /* CameraConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF118 /* CameraConfigurator.swift */; };
 		A1234567890ABCDEF059 /* ONNXDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF060 /* ONNXDetectionService.swift */; };
 		A1234567890ABCDEF061 /* CVDentitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF062 /* CVDentitionService.swift */; };
 		A1234567890ABCDEF063 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF064 /* FeatureFlags.swift */; };
@@ -80,6 +82,9 @@
 		A1234567890ABCDEF106 /* DataManager+AnalysisHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataManager+AnalysisHistory.swift"; sourceTree = "<group>"; };
 		A1234567890ABCDEF108 /* ResultExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultExporter.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF112 /* DetectionBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetectionBox.swift; sourceTree = "<group>"; };
+		A1234567890ABCDEF115 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		A1234567890ABCDEF116 /* Resources */ = {isa = PBXGroup; children = (A1234567890ABCDEF115 /* LaunchScreen.storyboard */,); path = Resources; sourceTree = "<group>"; };
+		A1234567890ABCDEF118 /* CameraConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraConfigurator.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF060 /* ONNXDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ONNXDetectionService.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF062 /* CVDentitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CVDentitionService.swift; sourceTree = "<group>"; };
 		A1234567890ABCDEF064 /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
@@ -120,6 +125,7 @@
 				A1234567890ABCDEF028 /* Services */,
 				A1234567890ABCDEF065 /* Config */,
 				A1234567890ABCDEF104 /* Utilities */,
+				A1234567890ABCDEF116 /* Resources */,
 				A1234567890ABCDEF006 /* Assets.xcassets */,
 				A1234567890ABCDEF029 /* Preview Content */,
 			);
@@ -181,6 +187,7 @@
 				A1234567890ABCDEF060 /* ONNXDetectionService.swift */,
 				A1234567890ABCDEF062 /* CVDentitionService.swift */,
 				A1234567890ABCDEF069 /* YOLOPreprocessor.swift */,
+				A1234567890ABCDEF118 /* CameraConfigurator.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -279,6 +286,7 @@
 				A1234567890ABCDEF005 /* Assets.xcassets in Resources */,
 				A1234567890ABCDEF007 /* Preview Assets.xcassets in Resources */,
 				A1234567890ABCDEF098 /* dental_model.onnx in Resources */,
+				A1234567890ABCDEF117 /* LaunchScreen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -315,6 +323,7 @@
 				A1234567890ABCDEF055 /* Detection.swift in Sources */,
 				A1234567890ABCDEF111 /* DetectionBox.swift in Sources */,
 				A1234567890ABCDEF113 /* DetectionBox+Vision.swift in Sources */,
+				A1234567890ABCDEF119 /* CameraConfigurator.swift in Sources */,
 				A1234567890ABCDEF057 /* MLDetectionService.swift in Sources */,
 				A1234567890ABCDEF100 /* ModelLocator.swift in Sources */,
 				A1234567890ABCDEF102 /* Log.swift in Sources */,

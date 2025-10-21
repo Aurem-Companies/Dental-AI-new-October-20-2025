@@ -18,6 +18,7 @@ class MLDetectionService: DetectionService, @unchecked Sendable {
     // MARK: - Initialization
     init() {
         loadModel()
+        Log.ml.info("Compiled CoreML present: \(ModelLocator.modelExists(name: "DentalModel", ext: "mlmodelc"))")
     }
     
     // MARK: - Model Loading
