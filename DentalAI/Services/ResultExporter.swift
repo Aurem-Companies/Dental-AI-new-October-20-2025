@@ -12,87 +12,59 @@ struct DetectionBox {
 struct ResultExporter {
     
     static func render(image: UIImage, detections: [DetectionBox], modelVersion: String, date: Date) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: image.size)
+        // Use UIGraphicsImageRenderer with proper format for retina and transparency
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = max(UIScreen.main.scale, 2) // guard retina
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
         
-        return renderer.image { context in
-            // Draw original image
+        let out = renderer.image { ctx in
+            // Draw original image (preserves orientation at UI level)
             image.draw(in: CGRect(origin: .zero, size: image.size))
             
-            // Draw detection boxes
+            // Draw detection boxes (clamped to image bounds)
             for detection in detections {
-                drawDetectionBox(detection, in: context.cgContext)
+                let r = detection.rect.integral
+                    .intersection(CGRect(origin: .zero, size: image.size))
+                guard r.width > 0, r.height > 0 else { continue }
+                
+                // Draw box with dashed border
+                let path = UIBezierPath(rect: r)
+                UIColor.white.withAlphaComponent(0.8).setStroke()
+                path.setLineDash([6, 3], count: 2, phase: 0)
+                path.lineWidth = 2
+                path.stroke()
+                
+                // Draw label with background
+                let label = "\(detection.label) • \(Int(round(Double(detection.confidence) * 100)))%"
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                    .foregroundColor: UIColor.white,
+                    .backgroundColor: UIColor.black.withAlphaComponent(0.6)
+                ]
+                let size = (label as NSString).size(withAttributes: attrs)
+                let labelRect = CGRect(x: r.minX, y: max(r.minY - size.height - 4, 0),
+                                     width: size.width + 8, height: size.height + 4)
+                UIBezierPath(roundedRect: labelRect, cornerRadius: 4).fill(with: .normal, alpha: 0.6)
+                (label as NSString).draw(in: labelRect.insetBy(dx: 4, dy: 2), withAttributes: attrs)
             }
             
             // Draw footer legend
-            drawFooterLegend(modelVersion: modelVersion, date: date, imageSize: image.size, in: context.cgContext)
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            let footer = "DentalAI — non-diagnostic • v\(modelVersion) • \(df.string(from: date))"
+            let footerAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 11, weight: .regular),
+                .foregroundColor: UIColor.white,
+                .backgroundColor: UIColor.black.withAlphaComponent(0.5)
+            ]
+            let fSize = (footer as NSString).size(withAttributes: footerAttrs)
+            let fRect = CGRect(x: 8,
+                             y: image.size.height - fSize.height - 8,
+                             width: fSize.width + 10,
+                             height: fSize.height + 6)
+            UIBezierPath(roundedRect: fRect, cornerRadius: 4).fill()
+            (footer as NSString).draw(in: fRect.insetBy(dx: 5, dy: 3), withAttributes: footerAttrs)
         }
-    }
-    
-    private static func drawDetectionBox(_ detection: DetectionBox, in context: CGContext) {
-        let boxRect = detection.rect
-        
-        // Draw semi-transparent background
-        context.setFillColor(UIColor.red.withAlphaComponent(0.3).cgColor)
-        context.fill(boxRect)
-        
-        // Draw border
-        context.setStrokeColor(UIColor.red.cgColor)
-        context.setLineWidth(2.0)
-        context.stroke(boxRect)
-        
-        // Draw label with background
-        let confidencePercent = Int(detection.confidence * 100)
-        let labelText = "\(detection.label) (\(confidencePercent)%)"
-        
-        let font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: UIColor.white
-        ]
-        
-        let textSize = labelText.size(withAttributes: attributes)
-        let labelRect = CGRect(
-            x: boxRect.minX,
-            y: boxRect.minY - textSize.height - 4,
-            width: textSize.width + 8,
-            height: textSize.height + 4
-        )
-        
-        // Draw label background
-        context.setFillColor(UIColor.black.withAlphaComponent(0.7).cgColor)
-        context.fill(labelRect)
-        
-        // Draw label text
-        labelText.draw(in: labelRect.insetBy(dx: 4, dy: 2), withAttributes: attributes)
-    }
-    
-    private static func drawFooterLegend(modelVersion: String, date: Date, imageSize: CGSize, in context: CGContext) {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
-        let dateString = formatter.string(from: date)
-        
-        let legendText = "DentalAI — non-diagnostic • \(modelVersion) • \(dateString)"
-        
-        let font = UIFont.systemFont(ofSize: 12, weight: .regular)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: UIColor.white
-        ]
-        
-        let textSize = legendText.size(withAttributes: attributes)
-        let legendRect = CGRect(
-            x: 8,
-            y: imageSize.height - textSize.height - 8,
-            width: textSize.width + 16,
-            height: textSize.height + 8
-        )
-        
-        // Draw legend background
-        context.setFillColor(UIColor.black.withAlphaComponent(0.8).cgColor)
-        context.fill(legendRect)
-        
-        // Draw legend text
-        legendText.draw(in: legendRect.insetBy(dx: 8, dy: 4), withAttributes: attributes)
-    }
+        return out
 }
