@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import CoreGraphics
 
 struct ResultExporter {
 
@@ -109,5 +110,32 @@ struct ResultExporter {
         guard let data = image.pngData() else { throw ExportError.encodingFailed }
         try data.write(to: url, options: .atomic)
         return url
+    }
+}
+
+extension ResultExporter {
+    /// Convenience: accept CGImage directly.
+    static func render(
+        cgImage: CGImage,
+        scale: CGFloat = 2.0,
+        orientation: UIImage.Orientation = .up,
+        detections: [DetectionBox],
+        modelVersion: String,
+        date: Date
+    ) -> UIImage {
+        let image = UIImage(cgImage: cgImage, scale: scale, orientation: orientation)
+        return render(image: image, detections: detections, modelVersion: modelVersion, date: date)
+    }
+
+    /// Convenience: draw after clamping to image bounds.
+    static func renderClamped(
+        image: UIImage,
+        detections: [DetectionBox],
+        modelVersion: String,
+        date: Date
+    ) -> UIImage {
+        let bounds = CGRect(origin: .zero, size: image.size)
+        let clamped = detections.map { $0.clamped(to: bounds) }
+        return render(image: image, detections: clamped, modelVersion: modelVersion, date: date)
     }
 }

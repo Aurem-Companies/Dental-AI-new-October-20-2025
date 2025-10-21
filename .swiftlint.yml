@@ -1,0 +1,43 @@
+# SwiftLint Configuration for DentalAI
+# Custom rules to prevent duplicate DetectionBox declarations
+
+custom_rules:
+  duplicate_detectionbox_declaration:
+    included: ".*\\.swift"
+    name: "Duplicate DetectionBox"
+    regex: "(struct|class|enum)\\s+DetectionBox\\s*[:{]"
+    message: "DetectionBox is a single-source model. Do not redeclare; import and reuse the canonical type in Models/DetectionBox.swift."
+    severity: error
+
+# Standard SwiftLint rules
+disabled_rules:
+  - trailing_whitespace
+  - line_length
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - todo
+  - unused_closure_parameter
+  - unused_optional_binding
+  - vertical_parameter_alignment_on_call
+  - yoda_condition
+
+# Configuration
+line_length:
+  warning: 120
+  error: 200
+
+function_body_length:
+  warning: 50
+  error: 100
+
+type_body_length:
+  warning: 300
+  error: 500
+
+file_length:
+  warning: 500
+  error: 1000
