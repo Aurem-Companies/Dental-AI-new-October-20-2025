@@ -4,11 +4,6 @@ import CoreVideo
 import UIKit
 import ONNXRuntime
 
-#if DEBUG
-/// DEBUG-only: Leave false to keep behavior identical. Flip true after clean build to test YOLO postproc.
-private let DEBUG_ENABLE_YOLO_POSTPROC = false
-#endif
-
 // Do NOT wrap the type declaration in #if. The class must always exist so callers compile.
 final class ONNXDetectionService: DetectionService {
     
@@ -103,9 +98,8 @@ final class ONNXDetectionService: DetectionService {
                 N = 3549; D = 84
             }
 
-            // DEBUG-only post-processing path (opt-in)
-            #if DEBUG
-            if DEBUG_ENABLE_YOLO_POSTPROC {
+            // FeatureFlag-controlled post-processing path (opt-in)
+            if FeatureFlags.current.enableYOLOPostProcessing {
                 var cands: [YOLOCandidate] = []
                 cands.reserveCapacity(N)
                 for i in 0..<N {
@@ -154,9 +148,8 @@ final class ONNXDetectionService: DetectionService {
                 }
                 return results
             }
-            #endif
 
-            // If DEBUG toggle is OFF, you can either:
+            // If FeatureFlag is OFF, you can either:
             // (a) Return an empty array (keeps prod behavior unchanged), or
             // (b) Return a basic parse of rawND without NMS (simple fallback).
             return []

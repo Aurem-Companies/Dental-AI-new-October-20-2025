@@ -8,6 +8,7 @@ struct FeatureFlags {
     var debugMode: Bool
     var highPerformanceMode: Bool
     var modelConfidenceThreshold: Double
+    var enableYOLOPostProcessing: Bool   // NEW
 }
 
 extension FeatureFlags {
@@ -15,13 +16,14 @@ extension FeatureFlags {
         let hasCompiledML = ModelLocator.anyCompiledMLExists()
 
         var flags = FeatureFlags(
-            useONNXDetection: false,
+            useONNXDetection: true,
             useMLDetection: hasCompiledML,   // default truth-based
             useCVDetection: true,
             enableFallback: true,
             debugMode: true,
             highPerformanceMode: false,
-            modelConfidenceThreshold: 0.30
+            modelConfidenceThreshold: 0.25,
+            enableYOLOPostProcessing: false   // default OFF; flip to true after validation
         )
 
         // Optional DEBUG overrides (no-op in Release). Safe to omit if you don't have it.
